@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "last_full_scan": "2026-07-06T21:27:12.718973Z",
+  "last_full_scan": "2026-07-06T22:15:11.939606Z",
   "scan_stats": {
     "github": {
       "last_scan": null,
@@ -19,9 +19,9 @@
       "error": null
     },
     "discord": {
-      "last_scan": null,
-      "items_found": 0,
-      "items_new": 0,
+      "last_scan": "2026-07-06T22:15:11.868521Z",
+      "items_found": 34,
+      "items_new": 34,
       "items_updated": 0,
       "items_unchanged": 0,
       "error": null
@@ -1101,6 +1101,396 @@
       "created": "2026-07-06T21:27:12.706841Z",
       "updated": "2026-07-06T21:27:12.706844Z",
       "content_hash": "ca263602bd2eb8daea1fc91e725fb08e6e3d93566b271469091ea69191a058ff"
+    },
+    {
+      "id": "dc-changelog-04857969",
+      "type": "memory",
+      "source": "discord",
+      "source_id": "1510397336004857969",
+      "path": "memorys/dc-changelog-04857969.md",
+      "title": "Bug fix: Planned kg/reps/RPE fields blank when starting live workout from a planned workout card",
+      "tags": [
+        "bug",
+        "source:discord"
+      ],
+      "created": "2026-07-06T21:59:08.616088Z",
+      "updated": "2026-07-06T21:59:08.616089Z",
+      "content_hash": "f5379567ecae3e28f694c8dfa1f46388cb9917b0c753d5a1f1051e9d2bbdff14"
+    },
+    {
+      "id": "dc-dohadovanie-77665667",
+      "type": "memory",
+      "source": "discord",
+      "source_id": "1523715898777665667",
+      "path": "memorys/dc-dohadovanie-77665667.md",
+      "title": "Discord bot is an MCP for KB/context engine, hosting to be handled by parzival2440",
+      "tags": [
+        "question",
+        "source:discord"
+      ],
+      "created": "2026-07-06T22:05:49.563915Z",
+      "updated": "2026-07-06T22:05:49.563918Z",
+      "content_hash": "e5f9f410a0ac782f184125a7d46e8329877863a1335080444e2dddfab08af21d"
+    },
+    {
+      "id": "dc-dohadovanie-27903598",
+      "type": "memory",
+      "source": "discord",
+      "source_id": "1523716493827903598",
+      "path": "memorys/dc-dohadovanie-27903598.md",
+      "title": "MCP bot is private, only parzival2440 can invite it to the server",
+      "tags": [
+        "question",
+        "source:discord"
+      ],
+      "created": "2026-07-06T22:05:49.563937Z",
+      "updated": "2026-07-06T22:05:49.563937Z",
+      "content_hash": "602a402fe46dec73527cae1eec0bc22fceee516da9c479f9a07ccc7895470f4c"
+    },
+    {
+      "id": "dc-dohadovanie-01869342",
+      "type": "memory",
+      "source": "discord",
+      "source_id": "1523750522601869342",
+      "path": "memorys/dc-dohadovanie-01869342.md",
+      "title": "Bot issue resolved — 'mate to opravene' (you have it fixed)",
+      "tags": [
+        "question",
+        "source:discord"
+      ],
+      "created": "2026-07-06T22:05:49.563959Z",
+      "updated": "2026-07-06T22:05:49.563959Z",
+      "content_hash": "fd38484f9b409bd0ece03abd803279398ae1c058e84235771be8a36217c35f2e"
+    },
+    {
+      "id": "dc-high-priority-45002608",
+      "type": "memory",
+      "source": "discord",
+      "source_id": "1511126923345002608",
+      "path": "memorys/dc-high-priority-45002608.md",
+      "title": "Bug: Live training session overwritten when navigating to another day to schedule",
+      "tags": [
+        "question",
+        "source:discord"
+      ],
+      "created": "2026-07-06T22:03:02.993398Z",
+      "updated": "2026-07-06T22:03:02.993402Z",
+      "content_hash": "0f7619c5e6891b89c15dbae1bc71000fc2a1a8f0d27d51ab38ca5c9121268122"
+    },
+    {
+      "id": "dc-high-priority-86393269",
+      "type": "memory",
+      "source": "discord",
+      "source_id": "1515031185586393269",
+      "path": "memorys/dc-high-priority-86393269.md",
+      "title": "Feature request: In-app membership purchasing",
+      "tags": [
+        "question",
+        "source:discord"
+      ],
+      "created": "2026-07-06T22:03:02.993433Z",
+      "updated": "2026-07-06T22:03:02.993434Z",
+      "content_hash": "b37a0a7d07a91db7140b29408d0e9e6615c367dee88c9c821a14833cdb005db9"
+    },
+    {
+      "id": "dc-high-priority-59258162",
+      "type": "memory",
+      "source": "discord",
+      "source_id": "1515031276359258162",
+      "path": "memorys/dc-high-priority-59258162.md",
+      "title": "Feature request: Membership management and QR code building access",
+      "tags": [
+        "question",
+        "source:discord"
+      ],
+      "created": "2026-07-06T22:03:02.993453Z",
+      "updated": "2026-07-06T22:03:02.993454Z",
+      "content_hash": "1bc5a7dc5aabf65b19ce64715d7c95691cc713ddac078fd69f7728828a298eb5"
+    },
+    {
+      "id": "dc-high-priority-56151419",
+      "type": "memory",
+      "source": "discord",
+      "source_id": "1515037275556151419",
+      "path": "memorys/dc-high-priority-56151419.md",
+      "title": "Feature request: Stripe payment integration for memberships",
+      "tags": [
+        "question",
+        "source:discord"
+      ],
+      "created": "2026-07-06T22:03:02.993480Z",
+      "updated": "2026-07-06T22:03:02.993481Z",
+      "content_hash": "90f40dd8c23a7921c6237e9c1f9c4dac3a6b73075b9c6f958802dfdcd0e4488a"
+    },
+    {
+      "id": "dc-high-priority-07191829",
+      "type": "memory",
+      "source": "discord",
+      "source_id": "1523411576307191829",
+      "path": "memorys/dc-high-priority-07191829.md",
+      "title": "Stripe payments and QR code building entry deferred — pay at reception for now",
+      "tags": [
+        "question",
+        "source:discord"
+      ],
+      "created": "2026-07-06T22:05:49.563975Z",
+      "updated": "2026-07-06T22:05:49.563975Z",
+      "content_hash": "548679dc09acd7b9ec96b1151a134b406343aa399aba5867991c9162a58d53fc"
+    },
+    {
+      "id": "dc-dohadovanie-21996043",
+      "type": "memory",
+      "source": "discord",
+      "source_id": "1523715383821996043",
+      "path": "memorys/dc-dohadovanie-21996043.md",
+      "title": "fuck_the_society lacks permission to add the bot to the server",
+      "tags": [
+        "question",
+        "source:discord"
+      ],
+      "created": "2026-07-06T22:05:49.563948Z",
+      "updated": "2026-07-06T22:05:49.563949Z",
+      "content_hash": "06cd2891a83cb5afe3aa9f693d24a1519bf769255a82cd2c662be248c32be777"
+    },
+    {
+      "id": "dc-claude-30967142",
+      "type": "memory",
+      "source": "discord",
+      "source_id": "1523085898730967142",
+      "path": "memorys/dc-claude-30967142.md",
+      "title": "Dev account credentials shared",
+      "tags": [
+        "question",
+        "source:discord"
+      ],
+      "created": "2026-07-06T22:10:47.741294Z",
+      "updated": "2026-07-06T22:10:47.741296Z",
+      "content_hash": "0fe9f94a3f456d0e48f86abd36224847940a68857b94003588dddd855ae2e5e0"
+    },
+    {
+      "id": "dc-claude-18166344",
+      "type": "memory",
+      "source": "discord",
+      "source_id": "1523085686218166344",
+      "path": "memorys/dc-claude-18166344.md",
+      "title": "Main Claude account credentials shared",
+      "tags": [
+        "question",
+        "source:discord"
+      ],
+      "created": "2026-07-06T22:10:47.741235Z",
+      "updated": "2026-07-06T22:10:47.741241Z",
+      "content_hash": "8bead225900d6ab7f7c875e6da0dd4623c0b51bac76a108f49563522e070d3e4"
+    },
+    {
+      "id": "dc-base-info-51225014",
+      "type": "memory",
+      "source": "discord",
+      "source_id": "1510703572751225014",
+      "path": "memorys/dc-base-info-51225014.md",
+      "title": "GitHub repository link shared: gymboost-PWA-betaa",
+      "tags": [
+        "question",
+        "source:discord"
+      ],
+      "created": "2026-07-06T22:07:32.790155Z",
+      "updated": "2026-07-06T22:07:32.790159Z",
+      "content_hash": "2e95cabe3d62a356ab58f7cbf5f2ea1e0409ab6bb01a9bd49ca37ce66da3a842"
+    },
+    {
+      "id": "dc-base-info-55202621",
+      "type": "memory",
+      "source": "discord",
+      "source_id": "1510704879755202621",
+      "path": "memorys/dc-base-info-55202621.md",
+      "title": "Vercel account shared for project deployment and hosting",
+      "tags": [
+        "devops",
+        "source:discord"
+      ],
+      "created": "2026-07-06T22:07:32.790179Z",
+      "updated": "2026-07-06T22:07:32.790179Z",
+      "content_hash": "7fd1e62e627bc8c43d67a88d68ebbf6c44cca80d4cb40d721d07412a16323b1b"
+    },
+    {
+      "id": "dc-base-info-68618238",
+      "type": "memory",
+      "source": "discord",
+      "source_id": "1510705002568618238",
+      "path": "memorys/dc-base-info-68618238.md",
+      "title": "Sentry error tracking project linked for database and management errors",
+      "tags": [
+        "question",
+        "source:discord"
+      ],
+      "created": "2026-07-06T22:07:32.790191Z",
+      "updated": "2026-07-06T22:07:32.790192Z",
+      "content_hash": "e61391465018e3ab500777a0eb5b4088565d59366286575c135716a77de77e23"
+    },
+    {
+      "id": "dc-errors-00165241",
+      "type": "memory",
+      "source": "discord",
+      "source_id": "1510699183500165241",
+      "path": "memorys/dc-errors-00165241.md",
+      "title": "Sentry error tracking project link shared",
+      "tags": [
+        "question",
+        "source:discord"
+      ],
+      "created": "2026-07-06T22:10:00.403168Z",
+      "updated": "2026-07-06T22:10:00.403172Z",
+      "content_hash": "3865a740845e36c77432a1d3d75745d6044cbbbc37f0e4bd239599a713e8a5e6"
+    },
+    {
+      "id": "dc-claude-50968246",
+      "type": "memory",
+      "source": "discord",
+      "source_id": "1523086477850968246",
+      "path": "memorys/dc-claude-50968246.md",
+      "title": "Burner account #1 credentials shared",
+      "tags": [
+        "question",
+        "source:discord"
+      ],
+      "created": "2026-07-06T22:10:47.741335Z",
+      "updated": "2026-07-06T22:10:47.741337Z",
+      "content_hash": "98b4df469223fc6a03288e61af51065529528ad216e505ccc7735e9a3db0ba4e"
+    },
+    {
+      "id": "dc-claude-44240496",
+      "type": "memory",
+      "source": "discord",
+      "source_id": "1523086777844240496",
+      "path": "memorys/dc-claude-44240496.md",
+      "title": "Burner account #2 credentials shared",
+      "tags": [
+        "question",
+        "source:discord"
+      ],
+      "created": "2026-07-06T22:10:47.741359Z",
+      "updated": "2026-07-06T22:10:47.741360Z",
+      "content_hash": "5379d40680120d561d41350d6dcceb41c77a01db666acaba4f6cd83eea5987ad"
+    },
+    {
+      "id": "dc-elektrikar-21178438",
+      "type": "memory",
+      "source": "discord",
+      "source_id": "1515040968821178438",
+      "path": "memorys/dc-elektrikar-21178438.md",
+      "title": "Technické požiadavky na elektrikára pre GymBoost prístupový systém",
+      "tags": [
+        "question",
+        "source:discord"
+      ],
+      "created": "2026-07-06T22:12:18.365689Z",
+      "updated": "2026-07-06T22:12:18.365695Z",
+      "content_hash": "363fc992b7fafb50bb5032c1e0557de78166c83f9788409204aaae0670ce999a"
+    },
+    {
+      "id": "dc-elektrikar-88233020",
+      "type": "memory",
+      "source": "discord",
+      "source_id": "1515041567688233020",
+      "path": "memorys/dc-elektrikar-88233020.md",
+      "title": "Zoznam 3 odporúčaných elektro-firiem v Novom Jičíne pre GymBoost inštaláciu",
+      "tags": [
+        "question",
+        "source:discord"
+      ],
+      "created": "2026-07-06T22:12:18.365748Z",
+      "updated": "2026-07-06T22:12:18.365749Z",
+      "content_hash": "1a112915cca61648137ed5cc53479b4c1ff863ca1c852d1b12e0b38c828cfda9"
+    },
+    {
+      "id": "dc-qr-code-scanner-18273885",
+      "type": "memory",
+      "source": "discord",
+      "source_id": "1515311012218273885",
+      "path": "memorys/dc-qr-code-scanner-18273885.md",
+      "title": "Case study: opening doors with QR codes (TSS Group)",
+      "tags": [
+        "question",
+        "source:discord"
+      ],
+      "created": "2026-07-06T22:14:20.772988Z",
+      "updated": "2026-07-06T22:14:20.772994Z",
+      "content_hash": "35edef4b22d6e84a114effd0a58701dc5efc37cb280342f7da1aaf1bd7728a73"
+    },
+    {
+      "id": "dc-qr-code-scanner-83061780",
+      "type": "memory",
+      "source": "discord",
+      "source_id": "1515311030883061780",
+      "path": "memorys/dc-qr-code-scanner-83061780.md",
+      "title": "QR-86 illuminated QR reader with MIFARE (Eletur)",
+      "tags": [
+        "question",
+        "source:discord"
+      ],
+      "created": "2026-07-06T22:14:20.773019Z",
+      "updated": "2026-07-06T22:14:20.773020Z",
+      "content_hash": "efe0b8b362a43769c1f156d08ab8711b3e9686305b1a54e2a22254f443acc15e"
+    },
+    {
+      "id": "dc-qr-code-scanner-34611055",
+      "type": "memory",
+      "source": "discord",
+      "source_id": "1515311054534611055",
+      "path": "memorys/dc-qr-code-scanner-34611055.md",
+      "title": "M350 access control QR reader RS485 (OnBuy)",
+      "tags": [
+        "question",
+        "source:discord"
+      ],
+      "created": "2026-07-06T22:14:20.773032Z",
+      "updated": "2026-07-06T22:14:20.773032Z",
+      "content_hash": "874d7cd33f723b0042a3e6ee7fa95400d0212fb92b725e2097e1267ffa2788ab"
+    },
+    {
+      "id": "dc-qr-code-scanner-25418778",
+      "type": "memory",
+      "source": "discord",
+      "source_id": "1515311070825418778",
+      "path": "memorys/dc-qr-code-scanner-25418778.md",
+      "title": "Fitness center turnstile & access hardware (OnGym)",
+      "tags": [
+        "question",
+        "source:discord"
+      ],
+      "created": "2026-07-06T22:14:20.773043Z",
+      "updated": "2026-07-06T22:14:20.773043Z",
+      "content_hash": "375327edf3ed7b15648e921e2af77ba0fb8a42bae00293663073bf0e823278dc"
+    },
+    {
+      "id": "dc-qr-code-scanner-08537108",
+      "type": "memory",
+      "source": "discord",
+      "source_id": "1515311086008537108",
+      "path": "memorys/dc-qr-code-scanner-08537108.md",
+      "title": "QR/barcode/ID card reader (TimeData)",
+      "tags": [
+        "question",
+        "source:discord"
+      ],
+      "created": "2026-07-06T22:14:20.773073Z",
+      "updated": "2026-07-06T22:14:20.773074Z",
+      "content_hash": "9e2c3d02c8b3ffeec505c17b72b83be86d1f3fe5d66b8d468f8788ca53a2c0b5"
+    },
+    {
+      "id": "dc-qr-code-scanner-08553368",
+      "type": "memory",
+      "source": "discord",
+      "source_id": "1517134826908553368",
+      "path": "memorys/dc-qr-code-scanner-08553368.md",
+      "title": "TSS Group — hardware reseller, can recommend implementation partners",
+      "tags": [
+        "question",
+        "source:discord"
+      ],
+      "created": "2026-07-06T22:14:20.773091Z",
+      "updated": "2026-07-06T22:14:20.773091Z",
+      "content_hash": "b09a65bc1c042d65d6b3414073772bfb842350c8ef8a4ff988fffffb75800595"
     }
   ],
   "tags": {
@@ -1256,6 +1646,66 @@
     ],
     "source:notion": [
       "nt-page-b6592d0e"
+    ],
+    "bug": [
+      "dc-changelog-04857969"
+    ],
+    "source:discord": [
+      "dc-changelog-04857969",
+      "dc-dohadovanie-77665667",
+      "dc-dohadovanie-27903598",
+      "dc-dohadovanie-01869342",
+      "dc-high-priority-45002608",
+      "dc-high-priority-86393269",
+      "dc-high-priority-59258162",
+      "dc-high-priority-56151419",
+      "dc-high-priority-07191829",
+      "dc-dohadovanie-21996043",
+      "dc-claude-30967142",
+      "dc-claude-18166344",
+      "dc-base-info-51225014",
+      "dc-base-info-55202621",
+      "dc-base-info-68618238",
+      "dc-errors-00165241",
+      "dc-claude-50968246",
+      "dc-claude-44240496",
+      "dc-elektrikar-21178438",
+      "dc-elektrikar-88233020",
+      "dc-qr-code-scanner-18273885",
+      "dc-qr-code-scanner-83061780",
+      "dc-qr-code-scanner-34611055",
+      "dc-qr-code-scanner-25418778",
+      "dc-qr-code-scanner-08537108",
+      "dc-qr-code-scanner-08553368"
+    ],
+    "question": [
+      "dc-dohadovanie-77665667",
+      "dc-dohadovanie-27903598",
+      "dc-dohadovanie-01869342",
+      "dc-high-priority-45002608",
+      "dc-high-priority-86393269",
+      "dc-high-priority-59258162",
+      "dc-high-priority-56151419",
+      "dc-high-priority-07191829",
+      "dc-dohadovanie-21996043",
+      "dc-claude-30967142",
+      "dc-claude-18166344",
+      "dc-base-info-51225014",
+      "dc-base-info-68618238",
+      "dc-errors-00165241",
+      "dc-claude-50968246",
+      "dc-claude-44240496",
+      "dc-elektrikar-21178438",
+      "dc-elektrikar-88233020",
+      "dc-qr-code-scanner-18273885",
+      "dc-qr-code-scanner-83061780",
+      "dc-qr-code-scanner-34611055",
+      "dc-qr-code-scanner-25418778",
+      "dc-qr-code-scanner-08537108",
+      "dc-qr-code-scanner-08553368"
+    ],
+    "devops": [
+      "dc-base-info-55202621"
     ]
   },
   "cross_refs": {}
