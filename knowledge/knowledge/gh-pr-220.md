@@ -6,8 +6,8 @@ source_url: https://github.com/dev-Leone/gymboost-PWA-betaa/pull/220
 tags:
 - enhancement
 - source:github
-created: '2026-07-06T20:55:53.620588+00:00'
-updated: '2026-07-06T20:55:53.620591+00:00'
+created: '2026-07-06T21:16:37.738614+00:00'
+updated: '2026-07-06T21:16:37.738618+00:00'
 confidence: high
 status: active
 authors:

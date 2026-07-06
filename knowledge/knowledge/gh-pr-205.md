@@ -6,8 +6,8 @@ source_url: https://github.com/dev-Leone/gymboost-PWA-betaa/pull/205
 tags:
 - enhancement
 - source:github
-created: '2026-07-06T20:55:53.620649+00:00'
-updated: '2026-07-06T20:55:53.620649+00:00'
+created: '2026-07-06T21:16:37.738693+00:00'
+updated: '2026-07-06T21:16:37.738694+00:00'
 confidence: high
 status: active
 authors:
@@ -42,13 +42,6 @@ Root-cause fixes from the Sentry/audit fan-out plan. **Preview/validation branch
 - `workout_exercises_select` `TO public` → `TO authenticated`.
 - `owns_workout`/`owns_template`/`owns_workout_exercise` SECDEF helpers replace inline-subquery RLS (the db10 recursion footgun). Owner-OR-trainer semantics preserved (independently re-verified against live prod).
 - db-smoke `authz_invariants.sql`: blocks net-new `TO public` on RLS tables + anon-executable SECDEF; advisory recursion heuristic.
-
-## Validation
-tsc 0 · guard 0 · ~140 focused tests green · npm audit clean. db-smoke will validate the DB layer here.
-
-## Known follow-ups (owner)
-- Pre-existing `workout_id IS NULL` template-exercise structure read (not a regression; needs template-visibility decision).
-- RC-4 Vercel Skew Protection toggle (GYMBOOST-A). Anon-sign-in advisor category. Deferred Sentry noise strings.
 
 ## Context
 PR #205 in dev-Leone/gymboost-PWA-betaa
