@@ -1,0 +1,38 @@
+[Unit]
+Description=GymBoost Knowledge Base MCP Server
+Documentation=https://github.com/dev-Leone/gymboost-PWA-betaa
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=miskora
+WorkingDirectory=/data/code/gymboost/kb-mcp-server
+ExecStart=/usr/bin/python3 -m src.main serve
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=10
+
+# Environment
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/data/code/gymboost/kb-mcp-server/.env
+
+# Security hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/data/code/gymboost/kb-mcp-server/knowledge
+ReadWritePaths=/data/code/gymboost/kb-mcp-server/logs
+ReadOnlyPaths=/data/code/gymboost/kb-mcp-server/config.json
+ReadOnlyPaths=/data/code/gymboost/kb-mcp-server/templates
+ReadOnlyPaths=/data/code/gymboost/kb-mcp-server/skills
+ReadOnlyPaths=/data/code/gymboost/kb-mcp-server/system_prompt.md
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=kb-mcp-server
+
+[Install]
+WantedBy=multi-user.target

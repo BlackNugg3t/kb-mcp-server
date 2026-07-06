@@ -1,0 +1,26 @@
+[Unit]
+Description=GymBoost Knowledge Base Scanner (One-shot)
+Documentation=https://github.com/dev-Leone/gymboost-PWA-betaa
+After=network-online.target kb-mcp-server.service
+Wants=network-online.target kb-mcp-server.service
+
+[Service]
+Type=oneshot
+User=miskora
+WorkingDirectory=/data/code/gymboost/kb-mcp-server
+ExecStart=/usr/bin/python3 -m src.main scan
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/data/code/gymboost/kb-mcp-server/.env
+
+# Security hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/data/code/gymboost/kb-mcp-server/knowledge
+ReadOnlyPaths=/data/code/gymboost/kb-mcp-server/config.json
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=kb-scanner

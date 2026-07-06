@@ -1,0 +1,14 @@
+[Unit]
+Description=GymBoost Knowledge Base Scanner Timer
+Documentation=https://github.com/dev-Leone/gymboost-PWA-betaa
+Requires=kb-mcp-server.service
+After=kb-mcp-server.service
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=30min
+RandomizedDelaySec=60
+Persistent=true
+
+[Install]
+WantedBy=timers.target

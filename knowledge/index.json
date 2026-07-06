@@ -1,0 +1,41 @@
+{
+  "version": "1.0.0",
+  "last_full_scan": null,
+  "scan_stats": {
+    "github": {
+      "last_scan": null,
+      "items_found": 0,
+      "items_new": 0,
+      "items_updated": 0,
+      "items_unchanged": 0,
+      "error": null
+    },
+    "notion": {
+      "last_scan": null,
+      "items_found": 0,
+      "items_new": 0,
+      "items_updated": 0,
+      "items_unchanged": 0,
+      "error": null
+    },
+    "discord": {
+      "last_scan": null,
+      "items_found": 0,
+      "items_new": 0,
+      "items_updated": 0,
+      "items_unchanged": 0,
+      "error": null
+    },
+    "telegram": {
+      "last_scan": null,
+      "items_found": 0,
+      "items_new": 0,
+      "items_updated": 0,
+      "items_unchanged": 0,
+      "error": null
+    }
+  },
+  "entries": [],
+  "tags": {},
+  "cross_refs": {}
+}
