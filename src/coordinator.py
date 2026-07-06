@@ -40,7 +40,6 @@ from .storage.models import (
     ScanResult,
     Source,
 )
-from .storage.templates import TemplateEngine
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +79,6 @@ class Coordinator:
             base_path=self.config.storage.base_path,
             index_file=self.config.storage.index_file,
         )
-        self.template_engine = TemplateEngine()
         self.diff_engine: Optional[DiffEngine] = None
 
         # System prompt path

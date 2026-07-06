@@ -44,10 +44,10 @@ External Services                    KB MCP Server                      Coding A
 ─────────────────                    ──────────────                      ──────────────
   GitHub ────┐                   ┌──────────────────┐                 ┌──────────────┐
   Notion ────┤─── Scanner ──────▶│  Coordinator     │──── MCP ──────▶│  Claude       │
-  Discord ───┤    Agents          │  + Indexer       │   (stdio)      │  Cursor       │
+  Discord ───┤    Agents          │  + Indexer       │ (stdio/HTTP)   │  Cursor       │
   Telegram ──┘   (read-only)      │  + Diff Engine    │                │  Harnext CLI  │
-                                  │  + MCP Server    │                │  GitHub Agent │
-                                  │  + Activity Log  │                └──────────────┘
+                                  │  + Activity Log  │◀──── HTTP ────│  GitHub Agent │
+                                  │  + Auth/Rate-Lim │   POST /mcp    └──────────────┘
                                   └────────┬─────────┘
                                            │
                                     ┌──────▼──────┐
@@ -56,6 +56,11 @@ External Services                    KB MCP Server                      Coding A
                                     │  *.md       │     versioned via git
                                     │  logs/      │     activity.jsonl
                                     └─────────────┘
+
+Transport Modes:
+  stdio — Local agents (Claude, Cursor) connect via standard I/O pipe
+  SSE/HTTP — Remote agents (GitHub Actions) connect via POST http://host:9020/mcp
+  Both modes share the same coordinator, indexer, and knowledge store.
 ```
 
 ## Quick Start
@@ -75,8 +80,12 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 cp .env.example .env
 # Edit .env — add KB_AUTH_TOKEN, GITHUB_TOKEN, etc.
 
-# Start the MCP server
+# Start the MCP server (mode from config.json — auto-detects stdio or sse)
 python -m src.main serve
+
+# The server is now listening:
+#   stdio mode: reads/writes via stdin/stdout
+#   HTTP mode:  http://127.0.0.1:9020/mcp  (set mode: "sse" in config)
 ```
 
 ### Docker
@@ -231,72 +240,85 @@ The activity log auto-rotates at 50MB and keeps 5 backups.
 
 ## CI/CD Integration
 
-The KB MCP server is designed to run alongside your CI/CD pipeline so that coding agents in GitHub Actions can access project knowledge.
+The KB MCP server runs on a dedicated server (not in GitHub Actions to avoid burning minutes). GitHub Actions agents connect to it via HTTP. For private runners, both can run on the same machine.
 
-### GitHub Actions
+### Architecture for Private Runners
 
-```yaml
-# .github/workflows/kb-server.yml
-name: KB MCP Server
-
-on:
-  workflow_dispatch:  # Manual trigger
-  schedule:
-    - cron: '*/30 * * * *'  # Scan every 30 min
-
-jobs:
-  kb-server:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - name: Checkout KB MCP Server
-        uses: actions/checkout@v4
-        with:
-          repository: your-org/gymboost-knowledge-base
-          path: kb-mcp-server
-          token: ${{ secrets.KB_REPO_PAT }}
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-        working-directory: kb-mcp-server
-
-      - name: Run knowledge scan
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
-          KB_AUTH_TOKEN: ${{ secrets.KB_AUTH_TOKEN }}
-        run: python -m src.main scan
-        working-directory: kb-mcp-server
-
-      - name: Commit updated knowledge
-        if: success()
-        run: |
-          cd kb-mcp-server
-          git config user.name "kb-bot"
-          git config user.email "kb-bot@github-actions"
-          git add knowledge/
-          git diff --staged --quiet || git commit -m "kb: automated scan $(date -u +%Y-%m-%dT%H:%MZ)"
-          git push
+```
+Same Machine (Private Runner)
+├── KB MCP Server (HTTP on :9020)
+│   ├── Scanner loop (internal)
+│   └── Coordinator + Indexer
+│
+├── GitHub Actions Runner
+│   └── Agent queries KB via curl http://localhost:9020/mcp
+│
+└── Local Claude/Cursor
+    └── Connects via stdio (direct pipe)
 ```
 
-### GitHub Actions — Agent Access Pattern
-
-When a coding agent inside a GitHub Actions runner needs KB access:
+### GitHub Actions — Query the KB
 
 ```yaml
-# In your main repo's workflow
-- name: Query knowledge base
-  id: kb
-  run: |
-    # Pipe a JSON-RPC request to the KB MCP server
-    echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"auth_token":"${{ secrets.KB_AUTH_TOKEN }}"}}' | python -m src.main serve
-    # Or use the MCP client SDK to call search_kb/get_knowledge
+# .github/workflows/agent-with-kb.yml
+name: Agent with KB Access
+
+on:
+  workflow_dispatch:
+  issues:
+    types: [opened, labeled]
+
+jobs:
+  agent:
+    runs-on: self-hosted  # Same machine as KB server
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Query knowledge base for context
+        id: kb
+        run: |
+          RESPONSE=$(curl -s -X POST http://localhost:9020/mcp \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.KB_AUTH_TOKEN }}" \
+            -d '{
+              "jsonrpc": "2.0",
+              "id": 1,
+              "method": "tools/call",
+              "params": {
+                "name": "search_kb",
+                "arguments": {
+                  "query": "${{ github.event.issue.title }}",
+                  "limit": 10
+                }
+              }
+            }')
+
+          echo "KB_RESULT=$RESPONSE" >> $GITHUB_OUTPUT
+
+      - name: Use KB context
+        run: |
+          echo "Found relevant knowledge:"
+          echo "${{ steps.kb.outputs.KB_RESULT }}" | jq .
+
+  kb-scan:
+    runs-on: self-hosted
+    if: github.event_name == 'schedule'
+    steps:
+      - name: Trigger KB rescan
+        run: |
+          curl -s -X POST http://localhost:9020/mcp \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.KB_AUTH_TOKEN }}" \
+            -d '{
+              "jsonrpc": "2.0",
+              "id": 1,
+              "method": "tools/call",
+              "params": {
+                "name": "rescan_kb",
+                "arguments": {"source": "github"}
+              }
+            }'
 ```
 
 ### GitHub Runner Setup
@@ -308,13 +330,25 @@ For self-hosted runners that need persistent KB access:
 cd /opt/gymboost-kb
 git clone https://github.com/your-org/gymboost-knowledge-base.git .
 
-# Install as systemd service
+# Configure
+cp .env.example .env
+python -c "import secrets; print(secrets.token_urlsafe(32))"  # generate auth token
+# Add token to .env as KB_AUTH_TOKEN
+
+# Install as systemd service (HTTP mode)
 sudo cp systemd/kb-mcp-server.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now kb-mcp-server
 
-# The MCP server is now running on the runner
-# agents can connect via stdio
+# Verify HTTP endpoint
+curl http://localhost:9020/health
+# → {"status":"healthy","server":"gymboost-knowledge-base","version":"1.0.0","auth_enabled":true}
+
+# GitHub Actions on the same machine can now query:
+curl -s -X POST http://localhost:9020/mcp \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search_kb","arguments":{"query":"test"}}}'
 ```
 
 ---
@@ -344,9 +378,28 @@ docker compose exec mcp-server python -m pytest tests/ -q
 Services:
 | Service | Profile | Purpose |
 |---------|---------|---------|
-| `mcp-server` | default | Long-running MCP server (stdio) |
+| `mcp-server` | default | Long-running MCP server (HTTP on :9020) |
 | `scanner` | default | Periodic scan loop |
 | `scanner-once` | `manual` | One-off scan: `docker compose run --rm scanner-once` |
+
+### Testing the HTTP Endpoint
+
+```bash
+# Health check
+curl http://localhost:9020/health
+
+# Initialize MCP connection
+curl -s -X POST http://localhost:9020/mcp \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}'
+
+# Search the knowledge base
+curl -s -X POST http://localhost:9020/mcp \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"search_kb","arguments":{"query":"security","limit":5}}}'
+```
 
 ### Systemd (Linux)
 
@@ -418,24 +471,18 @@ kb-mcp-server/
 │   │   └── telegram_scanner.py
 │   ├── mcp_server/          # MCP server implementation
 │   │   ├── server.py        # JSON-RPC server (auth, rate-limit, logging)
+│   │   ├── http_server.py   # HTTP/SSE transport for remote agents
 │   │   ├── tools.py         # Tool definitions + handlers
 │   │   └── activity_logger.py  # Persistent structured audit log
 │   └── storage/             # Storage layer
 │       ├── models.py        # Pydantic data models
 │       ├── indexer.py       # Index read/write/search
-│       ├── diff.py          # Change detection + dedup
-│       └── templates.py     # Template engine
-├── templates/               # Knowledge/memory/artifact templates
-│   ├── knowledge.md
-│   ├── memory.md
-│   └── artifact.md
-├── skills/                  # Harnext skill manifests
+│       └── diff.py          # Change detection + dedup
+├── skills/                  # Harnext scanner skill manifests
 │   ├── scan-github/
 │   ├── scan-notion/
 │   ├── scan-discord/
-│   ├── scan-telegram/
-│   ├── index-knowledge/
-│   └── diff-and-dedup/
+│   └── scan-telegram/
 ├── knowledge/               # Live knowledge store (auto-created)
 │   ├── index.json           # Master index
 │   ├── knowledge/           # Knowledge markdown files
@@ -449,8 +496,8 @@ kb-mcp-server/
 │   ├── test_config.py
 │   ├── test_diff.py
 │   ├── test_indexer.py
+│   ├── test_http_server.py
 │   └── test_scanners.py
-└── templates/               # Markdown templates
 ```
 
 ---
@@ -461,7 +508,7 @@ kb-mcp-server/
 # Install dev dependencies
 pip install -e ".[dev]"
 
-# Run tests (29 tests, all passing)
+# Run tests (37 tests: config, diff, indexer, scanners, http)
 pytest
 
 # Run with coverage
@@ -486,6 +533,8 @@ mypy src/
 | Scanner returns empty results | Harnext SDK not installed or no credentials | Install `harnext` package, verify API tokens |
 | "No scanner for X" | Scanner not implemented for that service | See [AGENTS.md](AGENTS.md) to add a new scanner |
 | Activity log not being written | `logs/` directory permissions | Ensure `logs/` is writable by the process user |
+| "Connection refused" on :9020 | Server not running or not in HTTP mode | Check `mcp_server.mode` is `"sse"` in config.json |
+| "401 Unauthorized" via HTTP | Missing or wrong `Authorization` header | Use `Authorization: Bearer YOUR_TOKEN` |
 
 ---
 

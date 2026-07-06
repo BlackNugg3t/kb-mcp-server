@@ -45,10 +45,10 @@ def setup_logging(level: str = "INFO", log_file: str | None = None) -> None:
 
 
 def cmd_serve(config_path: str) -> None:
-    """Start the MCP server in stdio mode with coordinator for rescan support."""
+    """Start the MCP server — stdio or HTTP/SSE mode based on config."""
     from src.config import load_config
     from src.coordinator import Coordinator
-    from src.mcp_server.server import create_mcp_server
+    from src.mcp_server.server import KBMCPToolHandler
     from src.mcp_server.activity_logger import ActivityLogger
 
     config = load_config(config_path)
@@ -59,6 +59,7 @@ def cmd_serve(config_path: str) -> None:
 
     logger = logging.getLogger("kb.main")
     logger.info("Starting GymBoost KB MCP Server v%s", config.version)
+    logger.info("Transport mode: %s", config.mcp_server.mode)
     logger.info("Debug mode: %s", "ON" if config.logging.debug else "OFF")
     logger.info("Activity log: %s", config.logging.activity_log_file)
 
@@ -69,20 +70,48 @@ def cmd_serve(config_path: str) -> None:
     # Initialize coordinator for admin tools (rescan_kb, reload_index)
     coordinator = Coordinator(config_path)
 
+    # Create shared tool handler (same for both transport modes)
     index_path = str(Path(config.storage.base_path) / config.storage.index_file)
-    server = create_mcp_server(
+    tool_handler = KBMCPToolHandler(
         index_path=index_path,
         coordinator=coordinator,
         auth_token=config.mcp_server.auth_token,
         rate_limit_rescan_seconds=config.mcp_server.rate_limit_rescan_seconds,
     )
 
-    alog.log("server_start", {
-        "version": config.version,
-        "auth_enabled": bool(config.mcp_server.auth_token),
-    })
+    mode = config.mcp_server.mode
 
-    server.serve()
+    if mode == "sse" or mode == "http":
+        # ── HTTP/SSE mode for remote agents ──────────────────────────
+        from src.mcp_server.http_server import create_http_server
+
+        server = create_http_server(
+            tool_handler=tool_handler,
+            host=config.mcp_server.host,
+            port=config.mcp_server.port,
+            auth_token=config.mcp_server.auth_token,
+        )
+        alog.log("server_start", {
+            "transport": "http",
+            "version": config.version,
+            "auth_enabled": bool(config.mcp_server.auth_token),
+            "host": config.mcp_server.host,
+            "port": config.mcp_server.port,
+        })
+        server.serve()
+
+    else:
+        # ── stdio mode for local agents ──────────────────────────────
+        from src.mcp_server.server import KBMCPStdioServer
+
+        server = KBMCPStdioServer(
+            tool_handler=tool_handler,
+            index_path=index_path,
+            coordinator=coordinator,
+            auth_token=config.mcp_server.auth_token,
+            rate_limit_rescan_seconds=config.mcp_server.rate_limit_rescan_seconds,
+        )
+        server.serve()
 
 
 def cmd_scan(config_path: str) -> None:

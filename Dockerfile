@@ -38,13 +38,13 @@ ENV PATH="/home/kb/.local/bin:$PATH"
 # Copy application code
 COPY --chown=kb:kb . .
 
-# Expose MCP port (for SSE mode if configured)
+# Expose MCP HTTP port (for SSE/HTTP mode — agents connect here)
 EXPOSE 9020
 
-# Health check
-HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
-    CMD python -c "import json; print(json.dumps({'status':'ok'}))" || exit 1
+# Health check via HTTP endpoint
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -sf http://localhost:9020/health || exit 1
 
-# Default: start MCP server in stdio mode
-# For SSE mode, override CMD with: python -m src.main serve-sse
+# Default: start MCP server (mode determined by config.json)
+# Set MCP mode via: MCP_MODE=sse or MCP_MODE=stdio
 CMD ["python", "-m", "src.main", "serve"]

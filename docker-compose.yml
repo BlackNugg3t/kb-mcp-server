@@ -15,12 +15,13 @@ services:
     container_name: kb-mcp-server
     restart: unless-stopped
 
-    # MCP runs over stdio — use stdin_open + tty for interactive access
-    stdin_open: true
-    tty: true
+    ports:
+      - "9020:9020"  # HTTP MCP endpoint
 
     environment:
       - PYTHONUNBUFFERED=1
+      # Transport mode: "sse" for HTTP (remote agents), "stdio" for local only
+      - MCP_MODE=sse
       # API tokens (set these in .env or environment)
       - KB_AUTH_TOKEN=${KB_AUTH_TOKEN:-}
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}

@@ -1,5 +1,5 @@
 [Unit]
-Description=GymBoost Knowledge Base MCP Server
+Description=GymBoost Knowledge Base MCP Server (HTTP)
 Documentation=https://github.com/dev-Leone/gymboost-PWA-betaa
 After=network-online.target
 Wants=network-online.target
@@ -25,9 +25,10 @@ ProtectHome=read-only
 ReadWritePaths=/data/code/gymboost/kb-mcp-server/knowledge
 ReadWritePaths=/data/code/gymboost/kb-mcp-server/logs
 ReadOnlyPaths=/data/code/gymboost/kb-mcp-server/config.json
-ReadOnlyPaths=/data/code/gymboost/kb-mcp-server/templates
-ReadOnlyPaths=/data/code/gymboost/kb-mcp-server/skills
-ReadOnlyPaths=/data/code/gymboost/kb-mcp-server/system_prompt.md
+
+# Network access required for HTTP mode
+PrivateNetwork=no
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 
 # Logging
 StandardOutput=journal

@@ -15,10 +15,10 @@
   },
 
   "mcp_server": {
-    "mode": "stdio",
-    "host": "127.0.0.1",
+    "mode": "sse",
+    "host": "0.0.0.0",
     "port": 9020,
-    "description": "GymBoost Knowledge Base — search, query, and retrieve indexed knowledge from all connected sources.",
+    "description": "GymBoost Knowledge Base — search, query, and retrieve indexed knowledge from all connected sources. Supports stdio (local) and sse (HTTP, remote) modes.",
     "auth_token": "${KB_AUTH_TOKEN}",
     "rate_limit_rescan_seconds": 300
   },
