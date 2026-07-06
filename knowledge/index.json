@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "last_full_scan": "2026-07-06T22:15:11.939606Z",
+  "last_full_scan": "2026-07-06T22:15:57.440644Z",
   "scan_stats": {
     "github": {
       "last_scan": null,
@@ -27,7 +27,7 @@
       "error": null
     },
     "telegram": {
-      "last_scan": null,
+      "last_scan": "2026-07-06T22:15:57.439642Z",
       "items_found": 0,
       "items_new": 0,
       "items_updated": 0,
