@@ -45,18 +45,43 @@ def setup_logging(level: str = "INFO", log_file: str | None = None) -> None:
 
 
 def cmd_serve(config_path: str) -> None:
-    """Start the MCP server in stdio mode."""
+    """Start the MCP server in stdio mode with coordinator for rescan support."""
     from src.config import load_config
+    from src.coordinator import Coordinator
     from src.mcp_server.server import create_mcp_server
+    from src.mcp_server.activity_logger import ActivityLogger
 
     config = load_config(config_path)
     setup_logging(config.logging.level, config.logging.file)
 
+    # Initialize activity logger
+    alog = ActivityLogger(config.logging.activity_log_file)
+
     logger = logging.getLogger("kb.main")
     logger.info("Starting GymBoost KB MCP Server v%s", config.version)
+    logger.info("Debug mode: %s", "ON" if config.logging.debug else "OFF")
+    logger.info("Activity log: %s", config.logging.activity_log_file)
+
+    if config.logging.debug:
+        logging.getLogger().setLevel(logging.DEBUG)
+        logger.debug("Debug logging enabled")
+
+    # Initialize coordinator for admin tools (rescan_kb, reload_index)
+    coordinator = Coordinator(config_path)
 
     index_path = str(Path(config.storage.base_path) / config.storage.index_file)
-    server = create_mcp_server(index_path)
+    server = create_mcp_server(
+        index_path=index_path,
+        coordinator=coordinator,
+        auth_token=config.mcp_server.auth_token,
+        rate_limit_rescan_seconds=config.mcp_server.rate_limit_rescan_seconds,
+    )
+
+    alog.log("server_start", {
+        "version": config.version,
+        "auth_enabled": bool(config.mcp_server.auth_token),
+    })
+
     server.serve()
 
 

@@ -15,6 +15,8 @@ from src.config import MCPServiceDef, ServiceConfig
 def github_config():
     return ServiceConfig(
         enabled=True,
+        priority=10,
+        check_interval_minutes=15,
         description="Test GitHub",
         mcp_server=MCPServiceDef(
             command="npx",
@@ -29,6 +31,8 @@ def github_config():
 def notion_config():
     return ServiceConfig(
         enabled=True,
+        priority=8,
+        check_interval_minutes=30,
         description="Test Notion",
         mcp_server=MCPServiceDef(
             command="npx",
@@ -42,6 +46,8 @@ def notion_config():
 def discord_config():
     return ServiceConfig(
         enabled=True,
+        priority=6,
+        check_interval_minutes=60,
         description="Test Discord",
         mcp_server=MCPServiceDef(
             command="npx",
@@ -55,6 +61,8 @@ def discord_config():
 def telegram_config():
     return ServiceConfig(
         enabled=True,
+        priority=5,
+        check_interval_minutes=60,
         description="Test Telegram",
         mcp_server=MCPServiceDef(
             command="npx",
@@ -139,3 +147,55 @@ class TestDiscordScanner:
         scanner = DiscordScannerAgent(discord_config)
         result = scanner.scan()
         assert result.error == "Service disabled in configuration"
+
+
+class TestPriorityAndIntervals:
+    """Tests for per-source priority and check intervals."""
+
+    def test_priority_sorted_high_first(self):
+        """Services should be sorted by priority (highest first)."""
+        from src.config import KBConfig, ServiceConfig, MCPServiceDef
+
+        config = KBConfig(
+            name="test",
+            services={
+                "github": ServiceConfig(
+                    enabled=True, priority=10, check_interval_minutes=15,
+                    mcp_server=MCPServiceDef(command="echo", args=[]),
+                ),
+                "discord": ServiceConfig(
+                    enabled=True, priority=6, check_interval_minutes=60,
+                    mcp_server=MCPServiceDef(command="echo", args=[]),
+                ),
+                "telegram": ServiceConfig(
+                    enabled=True, priority=5, check_interval_minutes=60,
+                    mcp_server=MCPServiceDef(command="echo", args=[]),
+                ),
+                "notion": ServiceConfig(
+                    enabled=True, priority=8, check_interval_minutes=30,
+                    mcp_server=MCPServiceDef(command="echo", args=[]),
+                ),
+            },
+            tags={"taxonomy": []},
+        )
+
+        # Verify priorities were parsed correctly
+        assert config.services["github"].priority == 10
+        assert config.services["notion"].priority == 8
+        assert config.services["discord"].priority == 6
+        assert config.services["telegram"].priority == 5
+
+        assert config.services["github"].check_interval_minutes == 15
+        assert config.services["notion"].check_interval_minutes == 30
+        assert config.services["discord"].check_interval_minutes == 60
+
+    def test_default_priority(self):
+        """Service config should default to priority=5."""
+        from src.config import ServiceConfig, MCPServiceDef
+
+        svc = ServiceConfig(
+            mcp_server=MCPServiceDef(command="echo", args=[]),
+        )
+
+        assert svc.priority == 5
+        assert svc.check_interval_minutes == 60

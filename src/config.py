@@ -31,6 +31,8 @@ class MCPServerConfig(BaseModel):
     host: str = "127.0.0.1"
     port: int = 9020
     description: str = ""
+    auth_token: str = ""
+    rate_limit_rescan_seconds: int = 300
 
 
 class MCPServiceDef(BaseModel):
@@ -51,6 +53,8 @@ class GitHubFilters(BaseModel):
 
 class ServiceConfig(BaseModel):
     enabled: bool = True
+    priority: int = 5
+    check_interval_minutes: int = 60
     description: str = ""
     mcp_server: MCPServiceDef = Field(default_factory=MCPServiceDef)
     repos: list[str] = Field(default_factory=list)
@@ -75,6 +79,8 @@ class LoggingConfig(BaseModel):
     level: str = "INFO"
     format: str = "json"
     file: str = "logs/kb-mcp-server.log"
+    debug: bool = False
+    activity_log_file: str = "logs/activity.jsonl"
 
 
 class KBConfig(BaseModel):

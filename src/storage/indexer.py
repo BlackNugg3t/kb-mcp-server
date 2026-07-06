@@ -149,21 +149,45 @@ class Indexer:
             safe_id = safe_id[-40:]
         return f"{prefix}-{safe_id}"
 
+    @staticmethod
+    def _sanitize_path_component(name: str) -> str:
+        """
+        Sanitize a path component to prevent directory traversal.
+
+        Strips path separators, null bytes, and control characters.
+        Limits length to 200 chars. Falls back to 'unknown' if empty.
+        """
+        import re
+        # Strip null bytes and control chars
+        name = re.sub(r"[\x00-\x1f]", "", name)
+        # Strip all path separators
+        name = name.replace("/", "-").replace("\\", "-").replace("..", "-")
+        # Limit length
+        name = name[:200]
+        # Fallback for empty
+        return name.strip("-") or "unknown"
+
     def make_file_path(self, entry_id: str, item_type: ItemType) -> Path:
         """
         Generate the filesystem path for a knowledge base file.
+        Sanitizes input to prevent directory traversal attacks.
 
         Args:
-            entry_id: The entry's unique ID
+            entry_id: The entry's unique ID (sanitized automatically)
             item_type: The type of item (knowledge/memory/artifact)
 
         Returns:
-            Relative path from the knowledge base root
+            Absolute path within the knowledge base root
         """
+        safe_id = self._sanitize_path_component(entry_id)
         dir_name = f"{item_type.value}s"  # knowledge → knowledges, memory → memories
         if item_type == ItemType.KNOWLEDGE:
             dir_name = "knowledge"
-        return self.base_path / dir_name / f"{entry_id}.md"
+        path = (self.base_path / dir_name / f"{safe_id}.md").resolve()
+        # Ensure the resolved path stays within base_path
+        if not str(path).startswith(str(self.base_path.resolve())):
+            raise ValueError(f"Path traversal denied for entry: {entry_id}")
+        return path
 
     @property
     def total_entries(self) -> int:

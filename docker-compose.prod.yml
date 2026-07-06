@@ -1,0 +1,22 @@
+# ── Docker-specific overrides ────────────────────────────────────────────
+# This file is automatically merged with docker-compose.yml
+
+services:
+  mcp-server:
+    # For production, pin specific version
+    # image: gymboost-kb-mcp-server:1.0.0
+    environment:
+      # Production overrides
+      - PYTHONUNBUFFERED=1
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  scanner:
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

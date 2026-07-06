@@ -1,0 +1,103 @@
+# ── GymBoost Knowledge Base MCP Server ───────────────────────────────────
+#
+# Usage:
+#   docker compose up -d              # Start MCP server + periodic scanner
+#   docker compose run --rm scanner   # Run a single scan
+#   docker compose logs -f mcp-server # Follow logs
+#
+version: "3.9"
+
+services:
+  # ── MCP Server (stdio mode, long-running) ──────────────────────────────
+  mcp-server:
+    build: .
+    image: gymboost-kb-mcp-server:latest
+    container_name: kb-mcp-server
+    restart: unless-stopped
+
+    # MCP runs over stdio — use stdin_open + tty for interactive access
+    stdin_open: true
+    tty: true
+
+    environment:
+      - PYTHONUNBUFFERED=1
+      # API tokens (set these in .env or environment)
+      - KB_AUTH_TOKEN=${KB_AUTH_TOKEN:-}
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - NOTION_API_KEY=${NOTION_API_KEY:-}
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+
+    volumes:
+      # Persist the knowledge base outside the container
+      - ./knowledge:/app/knowledge
+      # Mount config for live editing
+      - ./config.json:/app/config.json:ro
+      # Mount templates/skills as read-only
+      - ./templates:/app/templates:ro
+      - ./skills:/app/skills:ro
+      - ./system_prompt.md:/app/system_prompt.md:ro
+      # Persistent activity & app logs
+      - ./logs:/app/logs
+
+    networks:
+      - kb-network
+
+    command: ["python", "-m", "src.main", "serve"]
+
+  # ── Periodic Scanner (runs scan-loop) ─────────────────────────────────
+  scanner:
+    build: .
+    image: gymboost-kb-mcp-server:latest
+    container_name: kb-scanner
+    restart: unless-stopped
+
+    environment:
+      - PYTHONUNBUFFERED=1
+      - KB_AUTH_TOKEN=${KB_AUTH_TOKEN:-}
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - NOTION_API_KEY=${NOTION_API_KEY:-}
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+
+    volumes:
+      - ./knowledge:/app/knowledge
+      - ./config.json:/app/config.json:ro
+      - ./templates:/app/templates:ro
+      - ./skills:/app/skills:ro
+      - ./system_prompt.md:/app/system_prompt.md:ro
+      - ./logs:/app/logs
+
+    networks:
+      - kb-network
+
+    command: ["python", "-m", "src.main", "scan-loop"]
+
+  # ── One-shot Scanner (manual trigger) ─────────────────────────────────
+  scanner-once:
+    build: .
+    image: gymboost-kb-mcp-server:latest
+    container_name: kb-scanner-once
+    profiles: ["manual"]  # Only runs when explicitly invoked
+
+    environment:
+      - PYTHONUNBUFFERED=1
+      - KB_AUTH_TOKEN=${KB_AUTH_TOKEN:-}
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - NOTION_API_KEY=${NOTION_API_KEY:-}
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+
+    volumes:
+      - ./knowledge:/app/knowledge
+      - ./config.json:/app/config.json:ro
+      - ./templates:/app/templates:ro
+      - ./skills:/app/skills:ro
+      - ./system_prompt.md:/app/system_prompt.md:ro
+      - ./logs:/app/logs
+
+    command: ["python", "-m", "src.main", "scan"]
+
+networks:
+  kb-network:
+    driver: bridge

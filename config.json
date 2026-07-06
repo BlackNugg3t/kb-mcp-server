@@ -18,12 +18,16 @@
     "mode": "stdio",
     "host": "127.0.0.1",
     "port": 9020,
-    "description": "GymBoost Knowledge Base — search, query, and retrieve indexed knowledge from all connected sources."
+    "description": "GymBoost Knowledge Base — search, query, and retrieve indexed knowledge from all connected sources.",
+    "auth_token": "${KB_AUTH_TOKEN}",
+    "rate_limit_rescan_seconds": 300
   },
 
   "services": {
     "github": {
       "enabled": true,
+      "priority": 10,
+      "check_interval_minutes": 15,
       "description": "GitHub issues, PRs, commits, and discussions from the GymBoost repo",
       "mcp_server": {
         "command": "npx",
@@ -69,6 +73,8 @@
 
     "notion": {
       "enabled": true,
+      "priority": 8,
+      "check_interval_minutes": 30,
       "description": "Notion pages and databases for GymBoost PRD and specifications",
       "mcp_server": {
         "command": "npx",
@@ -95,6 +101,8 @@
 
     "discord": {
       "enabled": true,
+      "priority": 6,
+      "check_interval_minutes": 60,
       "description": "Discord channels for team discussions and decisions",
       "mcp_server": {
         "command": "npx",
@@ -120,6 +128,8 @@
 
     "telegram": {
       "enabled": true,
+      "priority": 5,
+      "check_interval_minutes": 60,
       "description": "Telegram chats for team coordination",
       "mcp_server": {
         "command": "npx",
@@ -179,6 +189,8 @@
   "logging": {
     "level": "INFO",
     "format": "json",
-    "file": "logs/kb-mcp-server.log"
+    "file": "logs/kb-mcp-server.log",
+    "debug": false,
+    "activity_log_file": "logs/activity.jsonl"
   }
 }

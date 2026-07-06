@@ -1,0 +1,16 @@
+# Docker build ignore
+__pycache__
+*.pyc
+.venv
+.git
+.gitignore
+*.log
+logs/
+.env
+.env.local
+.idea
+.vscode
+.pytest_cache
+*.egg-info
+dist
+build
