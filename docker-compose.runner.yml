@@ -1,0 +1,41 @@
+# ── Self-hosted GitHub Actions runner overlay ────────────────────────────
+#
+# Merges with docker-compose.yml so the runner joins the same kb-network
+# bridge and can reach the KB server at http://kb-mcp-server:9020.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.runner.yml up -d
+#   (or just run ./run.sh, which does exactly that)
+#
+version: "3.9"
+
+services:
+  gh-runner:
+    build: ./runner
+    image: gymboost-gh-runner:latest
+    container_name: gh-runner
+    restart: unless-stopped
+
+    environment:
+      # Repo-scoped registration. ACCESS_TOKEN is used only to mint/revoke
+      # registration tokens against REPO_URL — never used as the job's own
+      # GITHUB_TOKEN (that comes from GitHub itself per-job).
+      - RUNNER_SCOPE=repo
+      - ACCESS_TOKEN=${GH_RUNNER_PAT:?Set GH_RUNNER_PAT in .env}
+      - REPO_URL=${GH_RUNNER_REPO_URL:?Set GH_RUNNER_REPO_URL in .env}
+      - RUNNER_NAME=${GH_RUNNER_NAME:-gymboost-runner-01}
+      - LABELS=${GH_RUNNER_LABELS:-self-hosted,linux,gymboost}
+      # Persistent runner: one long-lived container processes jobs
+      # sequentially rather than re-registering after every job.
+      - EPHEMERAL=false
+      - DISABLE_AUTO_UPDATE=true
+
+    networks:
+      - kb-network
+
+    # No published ports: the runner only makes outbound connections to
+    # GitHub (long-poll) and to kb-mcp-server over the internal network.
+
+networks:
+  kb-network:
+    driver: bridge

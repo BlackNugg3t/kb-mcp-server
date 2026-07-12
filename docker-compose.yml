@@ -47,11 +47,16 @@ services:
     command: ["python", "-m", "src.main", "serve"]
 
   # ── Periodic Scanner (runs scan-loop) ─────────────────────────────────
+  # Gated behind the "kb-scan" profile: `docker compose up -d` alone will
+  # NOT start this — it scans (and fills knowledge/) immediately on launch,
+  # before its first sleep. Start explicitly when you actually want ongoing
+  # scans: `docker compose --profile kb-scan up -d scanner`.
   scanner:
     build: .
     image: gymboost-kb-mcp-server:latest
     container_name: kb-scanner
     restart: unless-stopped
+    profiles: ["kb-scan"]
 
     environment:
       - PYTHONUNBUFFERED=1

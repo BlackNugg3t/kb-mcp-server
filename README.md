@@ -97,14 +97,17 @@ cd /data/code/gymboost/kb-mcp-server
 cp .env.example .env
 vim .env  # add KB_AUTH_TOKEN, GITHUB_TOKEN, etc.
 
-# Build and start
+# Build and start (mcp-server only — query mode, no scanning)
 docker compose up -d
 
 # Follow logs
 docker compose logs -f mcp-server
 
-# Run a one-off scan
+# Run a one-off scan (fills knowledge/ once)
 docker compose run --rm scanner-once
+
+# Or start continuous scanning (scans immediately, then every scan_interval_minutes)
+docker compose --profile kb-scan up -d scanner
 ```
 
 ---
@@ -323,39 +326,81 @@ jobs:
 
 ### GitHub Runner Setup
 
-For self-hosted runners that need persistent KB access:
+The KB and a self-hosted GitHub Actions runner (registered against
+`dev-Leone/gymboost-PWA-betaa`) run as two containers on the same
+`kb-network` bridge, on one dedicated Debian box — but they have
+**independent lifecycles**. `./run.sh` starts only the runner; the KB is
+brought up later, whenever it's actually needed, with `./run-kb.sh`. Both
+scripts share the same Compose project (derived from this directory), so
+they land on the same `kb-network` regardless of which one runs first —
+the runner reaches the KB by service name once it exists, no `localhost`
+port juggling needed.
 
 ```bash
-# On the runner machine
-cd /opt/gymboost-kb
-git clone https://github.com/your-org/gymboost-knowledge-base.git .
+# On the runner machine (fresh Debian box):
+git clone git@github.com:BlackNugg3t/kb-mcp-server.git
+cd kb-mcp-server
 
-# Configure
 cp .env.example .env
-python -c "import secrets; print(secrets.token_urlsafe(32))"  # generate auth token
-# Add token to .env as KB_AUTH_TOKEN
+vim .env   # fill in KB_AUTH_TOKEN, GH_RUNNER_PAT, GH_RUNNER_REPO_URL,
+           # CLAUDE_CODE_OAUTH_TOKEN (see comments in .env.example)
 
-# Install as systemd service (HTTP mode)
-sudo cp systemd/kb-mcp-server.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now kb-mcp-server
+./deploy.sh   # installs Docker if missing, validates .env, builds images,
+              # syncs CLAUDE_CODE_OAUTH_TOKEN to the repo's GH secrets
+./run.sh      # starts gh-runner ONLY
 
-# Verify HTTP endpoint
-curl http://localhost:9020/health
-# → {"status":"healthy","server":"gymboost-knowledge-base","version":"1.0.0","auth_enabled":true}
-
-# GitHub Actions on the same machine can now query:
-curl -s -X POST http://localhost:9020/mcp \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search_kb","arguments":{"query":"test"}}}'
+# Later, when the KB is actually needed:
+./run-kb.sh           # mcp-server only — query mode, no auto-scan
+./run-kb.sh --scan    # also starts continuous scanning (see note below)
 ```
+
+No systemd unit is involved for this path — `restart: unless-stopped` plus
+Docker's own service bring containers back after a reboot.
+
+**Heads up: the scanner fills the KB immediately on start, not on a
+schedule.** `scan-loop` runs a full scan across every enabled source
+(GitHub, Notion, Discord, Telegram) *before* its first sleep — so the
+`scanner` service is gated behind a Compose profile (`kb-scan`) and won't
+start with a plain `docker compose up -d` or `./run-kb.sh`. Use
+`docker compose run --rm scanner-once` for a single fill you control, or
+`./run-kb.sh --scan` when you actually want it running continuously.
+
+Verify:
+
+```bash
+curl http://localhost:9020/health          # once run-kb.sh has been run
+docker logs -f gh-runner                   # look for "Listening for Jobs"
+docker compose exec gh-runner curl -sf http://kb-mcp-server:9020/health
+# then check GitHub: repo -> Settings -> Actions -> Runners
+```
+
+**Tokens needed:**
+
+| Var | Purpose |
+|-----|---------|
+| `GH_RUNNER_PAT` | PAT scoped to the target repo (Administration: read/write, or classic `repo` scope) — used only by the runner to mint/revoke its own registration token. |
+| `GH_RUNNER_REPO_URL` | The repo the runner registers against, e.g. `https://github.com/dev-Leone/gymboost-PWA-betaa`. |
+| `CLAUDE_CODE_OAUTH_TOKEN` | Claude Code OAuth token. `deploy.sh` pushes it to the repo's GitHub Actions secrets — harnext steps in workflows already reference `secrets.CLAUDE_CODE_OAUTH_TOKEN`, injected per-job by GitHub itself. The runner container never reads this value directly. |
+
+**Why not a custom polling loop?** A real self-hosted runner doesn't need
+one — the `Runner.Listener` process holds a single persistent long-poll
+connection to GitHub and is notified as soon as a job is queued. There's no
+interval to configure, and it isn't "spamming" GitHub — it's one long-lived
+connection, not repeated requests.
+
+This infra is separate from actually moving any workflow off
+`ubuntu-latest` — the app repo's harnext workflows still run
+GitHub-hosted; switching a stage to this runner (e.g. adding a
+`self-hosted` label to `runs-on:` in `harnext-verify.yml`) is a later,
+per-workflow decision.
 
 ---
 
 ## Deployment
 
 ### Docker Compose (Recommended)
+
+KB server only, no runner:
 
 ```bash
 # 1. Clone the repo
@@ -367,7 +412,7 @@ cp .env.example .env
 # Edit .env with your tokens
 python -c "import secrets; print(secrets.token_urlsafe(32))"  # generate auth token
 
-# 3. Start (MCP server + periodic scanner)
+# 3. Start (MCP server only — query mode, no scanning)
 docker compose up -d
 
 # 4. Verify
@@ -379,8 +424,9 @@ Services:
 | Service | Profile | Purpose |
 |---------|---------|---------|
 | `mcp-server` | default | Long-running MCP server (HTTP on :9020) |
-| `scanner` | default | Periodic scan loop |
+| `scanner` | `kb-scan` | Periodic scan loop — scans immediately on start, then every `scan_interval_minutes`. Opt-in: `docker compose --profile kb-scan up -d scanner` |
 | `scanner-once` | `manual` | One-off scan: `docker compose run --rm scanner-once` |
+| `gh-runner` | overlay (`docker-compose.runner.yml`) | Self-hosted GitHub Actions runner — see [GitHub Runner Setup](#github-runner-setup) for the full `deploy.sh` / `run.sh` / `run-kb.sh` flow. |
 
 ### Testing the HTTP Endpoint
 
@@ -455,6 +501,11 @@ kb-mcp-server/
 ├── Dockerfile               # Multi-stage container build
 ├── docker-compose.yml       # Docker services (server + scanner)
 ├── docker-compose.prod.yml  # Production overrides
+├── docker-compose.runner.yml # Self-hosted GitHub Actions runner overlay
+├── deploy.sh                # One-time bootstrap (Docker install, .env checks, image build)
+├── run.sh                   # Starts gh-runner only
+├── run-kb.sh                # Starts the KB later (mcp-server, optional --scan)
+├── runner/Dockerfile         # gh-runner image (myoung34/github-runner + gh CLI)
 ├── .dockerignore            # Docker build exclusions
 ├── .env.example             # Environment variable template
 ├── requirements.txt         # Python dependencies
