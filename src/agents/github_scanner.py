@@ -11,7 +11,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from ..config import ServiceConfig
+from ..config import LLMConfig, ServiceConfig
 from ..storage.models import (
     BaseItem,
     Confidence,
@@ -32,8 +32,13 @@ class GitHubScannerAgent(BaseScannerAgent):
 
     source = Source.GITHUB
 
-    def __init__(self, service_config: ServiceConfig, skill_path: str | None = None):
-        super().__init__(service_config, skill_path)
+    def __init__(
+        self,
+        service_config: ServiceConfig,
+        skill_path: str | None = None,
+        llm_config: LLMConfig | None = None,
+    ):
+        super().__init__(service_config, skill_path, llm_config)
         self.repos = service_config.repos
         self.scan_types = service_config.scan_types or ["issues", "pull_requests", "commits"]
         self.filters = service_config.filters
@@ -48,14 +53,12 @@ class GitHubScannerAgent(BaseScannerAgent):
         all_snippets: list[str] = []
         total_scanned = 0
 
-        agent = self._init_agent()
-
         for repo in self.repos:
             logger.info("Scanning GitHub repo: %s", repo)
 
             if "issues" in self.scan_types:
                 try:
-                    items, snippets, count = self._scan_issues(agent, repo)
+                    items, snippets, count = self._scan_issues(repo)
                     all_items.extend(items)
                     all_snippets.extend(snippets)
                     total_scanned += count
@@ -64,7 +67,7 @@ class GitHubScannerAgent(BaseScannerAgent):
 
             if "pull_requests" in self.scan_types:
                 try:
-                    items, snippets, count = self._scan_pull_requests(agent, repo)
+                    items, snippets, count = self._scan_pull_requests(repo)
                     all_items.extend(items)
                     all_snippets.extend(snippets)
                     total_scanned += count
@@ -73,7 +76,7 @@ class GitHubScannerAgent(BaseScannerAgent):
 
             if "commits" in self.scan_types:
                 try:
-                    items, snippets, count = self._scan_commits(agent, repo)
+                    items, snippets, count = self._scan_commits(repo)
                     all_items.extend(items)
                     all_snippets.extend(snippets)
                     total_scanned += count
@@ -87,39 +90,47 @@ class GitHubScannerAgent(BaseScannerAgent):
             items_scanned=total_scanned,
         )
 
-    def _scan_issues(self, agent: Any, repo: str) -> tuple[list[BaseItem], list[str], int]:
-        """
-        Scan GitHub issues for a repo.
-        In production, this would use the MCP server's list_issues and get_issue tools.
-        """
-        items: list[BaseItem] = []
-        snippets: list[str] = []
-        count = 0
+    def _scan_issues(self, repo: str) -> tuple[list[BaseItem], list[str], int]:
+        """Scan GitHub issues for a repo via the github MCP server."""
+        filters = self.filters.get("issues", {})
+        prompt = (
+            f'List GitHub issues for {repo} with state="{filters.get("state", "all")}" '
+            f'updated in the last {filters.get("since_days", 7)} days'
+        )
+        if filters.get("labels"):
+            prompt += f", filtered to labels: {', '.join(filters['labels'])}"
+        prompt += '. Only include findings with "type": "issue".'
 
-        # In production with Harnext + MCP:
-        # result = agent.run(f"List all issues for {repo} ...")
-        # Parse the structured output
+        result_text = self._run_query(prompt)
+        findings = [f for f in self._parse_json_array(result_text) if f.get("type") == "issue"]
+        items = self._extract_items(findings)
+        return items, [result_text] if result_text else [], len(findings)
 
-        # For now, provide the interface that will be used
-        logger.info("Would scan issues for %s (requires running Harnext agent)", repo)
+    def _scan_pull_requests(self, repo: str) -> tuple[list[BaseItem], list[str], int]:
+        """Scan pull requests for a repo via the github MCP server."""
+        filters = self.filters.get("pull_requests", {})
+        prompt = (
+            f'List GitHub pull requests for {repo} with state="{filters.get("state", "all")}" '
+            f'updated in the last {filters.get("since_days", 7)} days. '
+            'Only include findings with "type": "pull_request".'
+        )
+        result_text = self._run_query(prompt)
+        findings = [f for f in self._parse_json_array(result_text) if f.get("type") == "pull_request"]
+        items = self._extract_items(findings)
+        return items, [result_text] if result_text else [], len(findings)
 
-        return items, snippets, count
-
-    def _scan_pull_requests(self, agent: Any, repo: str) -> tuple[list[BaseItem], list[str], int]:
-        """Scan pull requests for a repo."""
-        items: list[BaseItem] = []
-        snippets: list[str] = []
-        count = 0
-        logger.info("Would scan PRs for %s (requires running Harnext agent)", repo)
-        return items, snippets, count
-
-    def _scan_commits(self, agent: Any, repo: str) -> tuple[list[BaseItem], list[str], int]:
-        """Scan recent commits for a repo."""
-        items: list[BaseItem] = []
-        snippets: list[str] = []
-        count = 0
-        logger.info("Would scan commits for %s (requires running Harnext agent)", repo)
-        return items, snippets, count
+    def _scan_commits(self, repo: str) -> tuple[list[BaseItem], list[str], int]:
+        """Scan recent commits for a repo via the github MCP server."""
+        filters = self.filters.get("commits", {})
+        prompt = (
+            f'List commits for {repo} on branch "{filters.get("branch", "main")}" '
+            f'from the last {filters.get("since_days", 7)} days. '
+            'Only include findings with "type": "commit".'
+        )
+        result_text = self._run_query(prompt)
+        findings = [f for f in self._parse_json_array(result_text) if f.get("type") == "commit"]
+        items = self._extract_items(findings)
+        return items, [result_text] if result_text else [], len(findings)
 
     def _extract_items(self, raw_findings: list[dict[str, Any]]) -> list[BaseItem]:
         """

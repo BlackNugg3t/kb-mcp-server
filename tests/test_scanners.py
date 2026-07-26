@@ -2,13 +2,35 @@
 Tests for scanner agents.
 """
 
+import json
+
+import harnext_sdk
 import pytest
+from harnext_sdk.types import ResultMessage
 
 from src.agents.github_scanner import GitHubScannerAgent
 from src.agents.notion_scanner import NotionScannerAgent
 from src.agents.discord_scanner import DiscordScannerAgent
 from src.agents.telegram_scanner import TelegramScannerAgent
 from src.config import MCPServiceDef, ServiceConfig
+
+
+def _fake_query(result_text: str):
+    """Build a fake harnext_sdk.query() replacement yielding one ResultMessage."""
+
+    async def fake_query(prompt, options):
+        yield ResultMessage(
+            subtype="success",
+            is_error=False,
+            result=result_text,
+            session_id=None,
+            num_turns=1,
+            duration_ms=1.0,
+            total_cost_usd=None,
+            usage={},
+        )
+
+    return fake_query
 
 
 @pytest.fixture
@@ -118,6 +140,55 @@ class TestGitHubScanner:
         scanner = GitHubScannerAgent(github_config)
         result = scanner.scan()
         assert result.error == "Service disabled in configuration"
+
+    def test_scan_issues_end_to_end_with_mocked_query(self, github_config, monkeypatch):
+        """_scan_issues should run a query(), parse its JSON result, and extract items."""
+        findings = [{
+            "type": "issue",
+            "number": 7,
+            "repo": "test/repo",
+            "html_url": "https://github.com/test/repo/issues/7",
+            "title": "Crash on logout",
+            "body": "Logging out crashes the app.",
+            "user": {"login": "tester"},
+            "labels": ["bug"],
+        }]
+        monkeypatch.setattr(harnext_sdk, "query", _fake_query(json.dumps(findings)))
+
+        scanner = GitHubScannerAgent(github_config)
+        items, snippets, count = scanner._scan_issues("test/repo")
+
+        assert count == 1
+        assert len(items) == 1
+        assert items[0].id == "gh-issue-7"
+
+    def test_scan_issues_handles_non_json_result(self, github_config, monkeypatch):
+        """A non-JSON (or malformed) query result should degrade to zero findings, not raise."""
+        monkeypatch.setattr(harnext_sdk, "query", _fake_query("not json at all"))
+
+        scanner = GitHubScannerAgent(github_config)
+        items, snippets, count = scanner._scan_issues("test/repo")
+
+        assert items == []
+        assert count == 0
+
+    def test_scan_issues_filters_out_other_types(self, github_config, monkeypatch):
+        """Findings of a different type in the same response should be filtered out."""
+        findings = [
+            {"type": "commit", "sha": "abc123", "repo": "test/repo", "message": "fix bug"},
+            {
+                "type": "issue", "number": 8, "repo": "test/repo",
+                "html_url": "https://github.com/test/repo/issues/8",
+                "title": "Another bug", "body": "...", "user": {"login": "tester"},
+            },
+        ]
+        monkeypatch.setattr(harnext_sdk, "query", _fake_query(json.dumps(findings)))
+
+        scanner = GitHubScannerAgent(github_config)
+        items, snippets, count = scanner._scan_issues("test/repo")
+
+        assert count == 1
+        assert items[0].id == "gh-issue-8"
 
 
 class TestDiscordScanner:

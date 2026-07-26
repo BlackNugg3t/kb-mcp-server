@@ -11,9 +11,11 @@ Security features:
 - Structured activity audit log
 
 Tools exposed:
-  - search_kb, get_knowledge, list_tags, list_sources, get_kb_stats  (query)
+  - search_kb, get_knowledge, list_tags, list_sources, get_kb_stats, export_kb  (query)
+  - ask_kb (conversational Q&A over the knowledge base)
   - rescan_kb (trigger immediate knowledge refresh from sources)
   - reload_index (reload index from disk)
+  - import_kb (restore/merge a knowledge base bundle)
 """
 
 from __future__ import annotations
@@ -27,13 +29,17 @@ from typing import Any, Callable, Optional
 
 from .tools import (
     TOOL_DEFINITIONS,
+    ask_kb,
+    export_kb,
     get_kb_stats,
     get_knowledge,
+    import_kb,
     list_sources,
     list_tags,
     reload_index,
     rescan_kb,
     search_kb,
+    set_chat_agent,
     set_coordinator,
 )
 from .activity_logger import ActivityLogger, get_activity_logger
@@ -41,7 +47,7 @@ from .activity_logger import ActivityLogger, get_activity_logger
 logger = logging.getLogger(__name__)
 
 # Admin tools that require rate limiting
-ADMIN_TOOLS = {"rescan_kb"}
+ADMIN_TOOLS = {"rescan_kb", "import_kb"}
 
 
 class KBMCPToolHandler:
@@ -51,15 +57,19 @@ class KBMCPToolHandler:
         self,
         index_path: str,
         coordinator: Any = None,
+        chat_agent: Any = None,
         auth_token: str = "",
         rate_limit_rescan_seconds: int = 300,
+        rate_limit_import_seconds: int = 300,
     ):
         self.index_path = index_path
         self.auth_token = auth_token
         self.rate_limit_rescan_seconds = rate_limit_rescan_seconds
+        self.rate_limit_import_seconds = rate_limit_import_seconds
 
         # Rate limiting state
         self._last_rescan_time: float = 0.0
+        self._last_import_time: float = 0.0
 
         # Activity logger
         self.activity_log = get_activity_logger()
@@ -68,25 +78,22 @@ class KBMCPToolHandler:
         if coordinator is not None:
             set_coordinator(coordinator)
 
+        # Inject chat agent for ask_kb
+        if chat_agent is not None:
+            set_chat_agent(chat_agent)
+
         self._handlers: dict[str, Callable] = {
             "search_kb": self._handle_search_kb,
             "get_knowledge": self._handle_get_knowledge,
             "list_tags": self._handle_list_tags,
             "list_sources": self._handle_list_sources,
             "get_kb_stats": self._handle_get_kb_stats,
+            "export_kb": self._handle_export_kb,
+            "ask_kb": self._handle_ask_kb,
             "rescan_kb": self._handle_rescan_kb,
             "reload_index": self._handle_reload_index,
+            "import_kb": self._handle_import_kb,
         }
-
-    def _check_auth(self) -> bool:
-        """Check if authentication is required and valid."""
-        if not self.auth_token:
-            # Auth not configured — allow all (development mode)
-            return True
-        # In stdio mode, the runtime environment controls who can connect.
-        # The auth token is validated at the initialize phase.
-        # For now, we trust the transport layer.
-        return True
 
     def _check_rate_limit(self, tool_name: str) -> tuple[bool, str]:
         """Check if a rate-limited tool can be invoked."""
@@ -100,6 +107,14 @@ class KBMCPToolHandler:
                 wait = int(self.rate_limit_rescan_seconds - elapsed)
                 return False, f"Rate limited. Please wait {wait}s before rescanning."
             self._last_rescan_time = now
+
+        elif tool_name == "import_kb":
+            now = time.time()
+            elapsed = now - self._last_import_time
+            if elapsed < self.rate_limit_import_seconds:
+                wait = int(self.rate_limit_import_seconds - elapsed)
+                return False, f"Rate limited. Please wait {wait}s before importing again."
+            self._last_import_time = now
 
         return True, ""
 
@@ -188,6 +203,16 @@ class KBMCPToolHandler:
     def _handle_get_kb_stats(self, args: dict[str, Any]) -> str:
         return get_kb_stats(index_path=self.index_path)
 
+    def _handle_export_kb(self, args: dict[str, Any]) -> str:
+        return export_kb(index_path=self.index_path)
+
+    def _handle_ask_kb(self, args: dict[str, Any]) -> str:
+        return ask_kb(
+            index_path=self.index_path,
+            question=args["question"],
+            session_id=args.get("session_id"),
+        )
+
     def _handle_rescan_kb(self, args: dict[str, Any]) -> str:
         return rescan_kb(
             index_path=self.index_path,
@@ -197,6 +222,13 @@ class KBMCPToolHandler:
 
     def _handle_reload_index(self, args: dict[str, Any]) -> str:
         return reload_index(index_path=self.index_path)
+
+    def _handle_import_kb(self, args: dict[str, Any]) -> str:
+        return import_kb(
+            index_path=self.index_path,
+            bundle_json=args["bundle_json"],
+            mode=args.get("mode", "merge"),
+        )
 
 
 class KBMCPStdioServer:
@@ -217,12 +249,14 @@ class KBMCPStdioServer:
         coordinator: Any = None,
         auth_token: str = "",
         rate_limit_rescan_seconds: int = 300,
+        rate_limit_import_seconds: int = 300,
     ):
         self.tool_handler = tool_handler or KBMCPToolHandler(
             index_path=index_path,
             coordinator=coordinator,
             auth_token=auth_token,
             rate_limit_rescan_seconds=rate_limit_rescan_seconds,
+            rate_limit_import_seconds=rate_limit_import_seconds,
         )
         self.index_path = index_path
         self.auth_token = auth_token
@@ -268,20 +302,8 @@ class KBMCPStdioServer:
         if not self.auth_token:
             return True
 
-        # MCP clients can pass auth in params or via environment
         client_token = params.get("auth_token", "")
-
-        # Also check if the auth_token was set as environment variable
-        # in the client's context (runtime check only — in stdio mode,
-        # the process boundary provides auth implicitly)
-
-        if client_token and client_token == self.auth_token:
-            return True
-
-        # If no explicit token match, we still allow if auth is from env
-        # (in stdio mode, the caller already has process-level access)
-        # For SSE/HTTP mode this would be stricter
-        return True  # stdio mode trusts the transport layer
+        return client_token == self.auth_token
 
     def _handle_request(self, request: dict[str, Any]) -> dict[str, Any] | None:
         """Handle a single JSON-RPC request."""
@@ -293,6 +315,8 @@ class KBMCPStdioServer:
             return self._handle_initialize(req_id, params)
         elif method == "initialized":
             return None  # Notification, no response
+        elif method in ("tools/list", "tools/call") and not self._initialized:
+            return self._error_response(req_id, -32001, "Not authenticated: call initialize first")
         elif method == "tools/list":
             return self._handle_tools_list(req_id)
         elif method == "tools/call":

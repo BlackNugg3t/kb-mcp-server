@@ -22,8 +22,17 @@ from pydantic import BaseModel, Field
 class LLMConfig(BaseModel):
     provider: str = "anthropic"
     model: str = "claude-sonnet-4-20250514"
+    fallback_model: str = ""
     max_turns: int = 20
-    permission_mode: str = "auto"
+    # Must be a real harnext PermissionMode: default/acceptEdits/plan/dontAsk/bypassPermissions.
+    # "dontAsk" denies any tool not explicitly in allowed_tools (confirmed via harnext's
+    # tool-policy.ts) — since we scope tool access at the MCP-server-registration level
+    # (directTools/allow, see src/harnext_bootstrap.py) instead of allowed_tools, scanners
+    # and the chat agent need "bypassPermissions" or every tool call is silently denied.
+    permission_mode: str = "bypassPermissions"
+    # Only used when provider == "ollama" — base URL for a local/proxy OpenAI-compatible
+    # server registered under harnext's "ollama" provider slot (see src/harnext_bootstrap.py).
+    ollama_base_url: str = "http://127.0.0.1:11434"
 
 
 class MCPServerConfig(BaseModel):
@@ -33,6 +42,7 @@ class MCPServerConfig(BaseModel):
     description: str = ""
     auth_token: str = ""
     rate_limit_rescan_seconds: int = 300
+    rate_limit_import_seconds: int = 300
 
 
 class MCPServiceDef(BaseModel):

@@ -1,6 +1,6 @@
 [Unit]
 Description=GymBoost Knowledge Base Scanner Timer
-Documentation=https://github.com/dev-Leone/gymboost-PWA-betaa
+Documentation=https://github.com/GymBOOST-team/gymboost
 Requires=kb-mcp-server.service
 After=kb-mcp-server.service
 

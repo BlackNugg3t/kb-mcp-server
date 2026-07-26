@@ -2,18 +2,21 @@
 Base Scanner Agent
 
 Abstract base class for all service-specific scanner agents.
-Each scanner is a read-only Harnext instance connected to its MCP server.
+Each scanner drives a one-shot harnext query connected to its MCP server.
 """
 
 from __future__ import annotations
 
+import json
 import logging
+import re
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-from ..config import MCPServiceDef, ServiceConfig
+from ..config import LLMConfig, ServiceConfig
+from ..harnext_query import run_harnext_query
 from ..storage.models import (
     BaseItem,
     ItemType,
@@ -38,86 +41,100 @@ class BaseScannerAgent(ABC):
     source: Source  # Must be set by subclasses
     item_type: ItemType = ItemType.KNOWLEDGE  # Default, override as needed
 
-    def __init__(self, service_config: ServiceConfig, skill_path: str | None = None):
+    def __init__(
+        self,
+        service_config: ServiceConfig,
+        skill_path: str | None = None,
+        llm_config: LLMConfig | None = None,
+    ):
         """
         Initialize the scanner agent.
 
         Args:
             service_config: Service configuration from config.json
             skill_path: Optional path to a skill.md file for this scanner
+            llm_config: LLM provider/model settings (from KBConfig.llm)
         """
         self.config = service_config
         self.skill_path = Path(skill_path) if skill_path else None
         self._mcp_def = service_config.mcp_server
-        self._agent: Any = None  # Harnext instance, initialized lazily
+        self.llm = llm_config or LLMConfig()
 
     @property
     def enabled(self) -> bool:
         """Check if this scanner is enabled in config."""
         return self.config.enabled
 
-    def _get_harnext_kwargs(self) -> dict[str, Any]:
+    def _run_query(self, prompt: str) -> str:
         """
-        Build the kwargs dict for initializing a Harnext agent.
-        Subclasses can override to customize.
+        Run one harnext query synchronously and return the final result text.
+
+        Returns "[]" (empty JSON array) if the harnext SDK isn't installed or
+        the query otherwise fails, so callers can uniformly `json.loads()` the
+        result without special-casing mock mode.
         """
-        kwargs: dict[str, Any] = {
-            "tools": ["read", "skill", "mcp"],
-            "permission_mode": "auto",
-            "max_turns": 20,
-        }
-
-        # Add MCP server definition
-        if self._mcp_def.command:
-            kwargs["mcp_servers"] = {
-                self.source.value: {
-                    "command": self._mcp_def.command,
-                    "args": self._mcp_def.args,
-                    "env": self._mcp_def.env,
-                    "mode": self._mcp_def.mode,
-                    "allow": self._mcp_def.allow,
-                }
-            }
-        elif self._mcp_def.url:
-            kwargs["mcp_servers"] = {
-                self.source.value: {
-                    "url": self._mcp_def.url,
-                    "mode": self._mcp_def.mode,
-                    "allow": self._mcp_def.allow,
-                }
-            }
-
-        return kwargs
-
-    def _init_agent(self) -> Any:
-        """
-        Initialize the Harnext agent for this scanner.
-        Uses lazy init to avoid creating agents for disabled services.
-        """
-        if self._agent is not None:
-            return self._agent
-
+        system_prompt = (
+            self.skill_path.read_text(encoding="utf-8")
+            if self.skill_path and self.skill_path.exists()
+            else None
+        )
         try:
-            from harnext import Harnext
-
-            kwargs = self._get_harnext_kwargs()
-            self._agent = Harnext(**kwargs)
-
-            # Register skill if available
-            if self.skill_path and self.skill_path.exists():
-                self._agent.skills.add(str(self.skill_path))
-
-            logger.info("Scanner agent initialized for %s", self.source.value)
-            return self._agent
+            result_text, _session_id = run_harnext_query(prompt, self.llm, system_prompt=system_prompt)
+            return result_text
         except ImportError:
             logger.warning(
-                "harnext SDK not installed. Scanner %s will run in mock mode.",
+                "harnext_sdk not installed. Scanner %s will run in mock mode.",
                 self.source.value,
             )
-            return None
+            return "[]"
         except Exception as e:
-            logger.error("Failed to initialize scanner agent for %s: %s", self.source.value, e)
-            return None
+            logger.error("harnext query failed for %s: %s", self.source.value, e)
+            return "[]"
+
+    # Matches a ```json ... ``` (or bare ```) fenced code block.
+    _FENCED_JSON_RE = re.compile(r"```(?:json)?\s*(\[.*?\])\s*```", re.DOTALL)
+
+    @classmethod
+    def _parse_json_array(cls, result_text: str) -> list[dict[str, Any]]:
+        """
+        Parse a query() result as a JSON array of findings (the contract
+        each skills/scan-*/skill.md is instructed to follow). Returns []
+        on empty/unparseable/non-array output rather than raising, so a bad
+        or missing agent response degrades to zero findings, not a crash.
+
+        Tolerates models that don't follow "output ONLY a JSON array" exactly
+        — e.g. prose before/after the array, or wrapping it in a markdown
+        code fence — by falling back to extracting the array substring
+        before giving up.
+        """
+        if not result_text:
+            return []
+
+        for candidate in cls._json_array_candidates(result_text):
+            try:
+                parsed = json.loads(candidate)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(parsed, list):
+                return parsed
+
+        logger.warning("Could not find a JSON array in query result: %.200s", result_text)
+        return []
+
+    @classmethod
+    def _json_array_candidates(cls, text: str) -> list[str]:
+        """Candidate substrings to try parsing as a JSON array, most-likely first."""
+        candidates = [text.strip()]
+
+        fenced = cls._FENCED_JSON_RE.search(text)
+        if fenced:
+            candidates.append(fenced.group(1).strip())
+
+        first, last = text.find("["), text.rfind("]")
+        if first != -1 and last != -1 and last > first:
+            candidates.append(text[first : last + 1].strip())
+
+        return candidates
 
     @abstractmethod
     def scan(self) -> ScanResult:

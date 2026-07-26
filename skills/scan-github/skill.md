@@ -44,4 +44,17 @@ For each finding, produce a structured snippet:
 
 ## Output format
 
-Return a structured list of findings with the above fields. Do NOT create issues, do NOT comment — READ ONLY.
+Your final message must be ONLY a JSON array — no prose, no markdown code fences, no explanation before or after. If there are no findings, output `[]`. Each element must match one of these shapes exactly:
+
+```json
+[
+  {"type": "issue", "number": 123, "repo": "owner/repo", "html_url": "https://github.com/owner/repo/issues/123",
+   "title": "...", "body": "...", "labels": ["bug", "enhancement"], "user": {"login": "octocat"}},
+  {"type": "pull_request", "number": 45, "repo": "owner/repo", "html_url": "https://github.com/owner/repo/pull/45",
+   "title": "...", "body": "...", "user": {"login": "octocat"}},
+  {"type": "commit", "sha": "abc123def456...", "repo": "owner/repo", "html_url": "https://github.com/owner/repo/commit/abc123",
+   "message": "commit message", "author": {"login": "octocat"}}
+]
+```
+
+Do NOT create issues, do NOT comment — READ ONLY.

@@ -29,7 +29,11 @@ class Indexer:
     """Manages the master knowledge base index file."""
 
     def __init__(self, base_path: str | Path = "./knowledge", index_file: str = "index.json"):
-        self.base_path = Path(base_path)
+        # Resolved once here so every consumer (make_file_path, coordinator's
+        # relative_to() call, etc.) compares against the same absolute path —
+        # a relative base_path previously caused relative_to() to fail since
+        # make_file_path() resolves its own output but base_path stayed relative.
+        self.base_path = Path(base_path).resolve()
         self.index_path = self.base_path / index_file
         self._index: Optional[MasterIndex] = None
 

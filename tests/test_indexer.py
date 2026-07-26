@@ -18,6 +18,33 @@ from src.storage.models import (
 )
 
 
+class TestIndexerBasePathResolution:
+    """
+    Regression test: Indexer.base_path must be resolved to absolute at
+    construction time. Previously it stayed relative (e.g. "./knowledge",
+    as used by the real config.json), while make_file_path() resolves its
+    own output — so coordinator._persist_item()'s
+    file_path.relative_to(indexer.base_path) raised ValueError for every
+    single item on a real run, even though scanning/diffing worked fine.
+    """
+
+    def test_make_file_path_relative_to_relative_base_path(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        indexer = Indexer(base_path="./knowledge")
+
+        file_path = indexer.make_file_path("gh-issue-1", ItemType.KNOWLEDGE)
+
+        # This is exactly what coordinator._persist_item() does after
+        # make_file_path() — must not raise ValueError.
+        relative = file_path.relative_to(indexer.base_path)
+        assert relative == Path("knowledge/gh-issue-1.md")
+
+    def test_base_path_is_absolute(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        indexer = Indexer(base_path="./knowledge")
+        assert indexer.base_path.is_absolute()
+
+
 class TestIndexer:
     """Tests for the Indexer class."""
 

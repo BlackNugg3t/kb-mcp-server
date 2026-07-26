@@ -1,6 +1,6 @@
 [Unit]
 Description=GymBoost Knowledge Base MCP Server (HTTP)
-Documentation=https://github.com/dev-Leone/gymboost-PWA-betaa
+Documentation=https://github.com/GymBOOST-team/gymboost
 After=network-online.target
 Wants=network-online.target
 

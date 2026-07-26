@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from .config import KBConfig, get_enabled_services, load_config
+from .harnext_bootstrap import bootstrap as bootstrap_harnext
 from .agents.base import BaseScannerAgent
 from .agents.github_scanner import GitHubScannerAgent
 from .agents.notion_scanner import NotionScannerAgent
@@ -38,6 +39,7 @@ from .storage.models import (
     MasterIndex,
     MemoryItem,
     ScanResult,
+    ScanStats,
     Source,
 )
 
@@ -73,6 +75,10 @@ class Coordinator:
     def __init__(self, config_path: str | Path = "config.json"):
         self.config_path = Path(config_path)
         self.config: KBConfig = load_config(self.config_path)
+
+        # Register MCP servers / provider config with the real harnext CLI
+        # (idempotent — see src/harnext_bootstrap.py)
+        bootstrap_harnext(self.config, config_path=self.config_path)
 
         # Initialize components
         self.indexer = Indexer(
@@ -167,7 +173,7 @@ class Coordinator:
             logger.warning("No scanner implementation for service: %s", service_name)
             return None
 
-        scanner = scanner_cls(service_config, skill_path)
+        scanner = scanner_cls(service_config, skill_path, llm_config=self.config.llm)
         self._scanners[service_name] = scanner
         return scanner
 
@@ -279,9 +285,15 @@ class Coordinator:
 
         # Run the scanner
         scan_result = scanner.scan()
+        now = datetime.now(timezone.utc)
 
         if scan_result.error:
             logger.error("Scan error for %s: %s", service_name, scan_result.error)
+            self.indexer.update_scan_stats(
+                scanner.source,
+                ScanStats(last_scan=now, items_found=0, items_new=0,
+                          items_updated=0, items_unchanged=0, error=scan_result.error),
+            )
             return {
                 "error": scan_result.error,
                 "new": 0,
@@ -290,7 +302,7 @@ class Coordinator:
             }
 
         # Update last scan time
-        self._last_scan_times[service_name] = datetime.now(timezone.utc)
+        self._last_scan_times[service_name] = now
 
         # Diff against existing index
         source = scanner.source
@@ -331,6 +343,17 @@ class Coordinator:
             for item in scan_result.new_items:
                 self._persist_item(item)
 
+        self.indexer.update_scan_stats(
+            source,
+            ScanStats(
+                last_scan=now,
+                items_found=scan_result.items_scanned,
+                items_new=result.get("new", 0),
+                items_updated=result.get("updated", 0),
+                items_unchanged=result.get("unchanged", 0),
+                error=None,
+            ),
+        )
         self.indexer.save()
         return result
 

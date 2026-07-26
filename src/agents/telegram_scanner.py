@@ -11,7 +11,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from ..config import ServiceConfig
+from ..config import LLMConfig, ServiceConfig
 from ..storage.models import (
     BaseItem,
     ContextType,
@@ -32,8 +32,13 @@ class TelegramScannerAgent(BaseScannerAgent):
 
     source = Source.TELEGRAM
 
-    def __init__(self, service_config: ServiceConfig, skill_path: str | None = None):
-        super().__init__(service_config, skill_path)
+    def __init__(
+        self,
+        service_config: ServiceConfig,
+        skill_path: str | None = None,
+        llm_config: LLMConfig | None = None,
+    ):
+        super().__init__(service_config, skill_path, llm_config)
         self.chats = service_config.chats
         self.message_filters = service_config.message_filters
 
@@ -47,8 +52,6 @@ class TelegramScannerAgent(BaseScannerAgent):
         all_snippets: list[str] = []
         total_scanned = 0
 
-        agent = self._init_agent()
-
         chats_to_scan = self.chats
         if not chats_to_scan:
             logger.info("No Telegram chats configured. Use config.json to specify chat IDs.")
@@ -56,7 +59,7 @@ class TelegramScannerAgent(BaseScannerAgent):
 
         for chat_id in chats_to_scan:
             try:
-                items, snippets, count = self._scan_chat(agent, chat_id)
+                items, snippets, count = self._scan_chat(chat_id)
                 all_items.extend(items)
                 all_snippets.extend(snippets)
                 total_scanned += count
@@ -70,13 +73,20 @@ class TelegramScannerAgent(BaseScannerAgent):
             items_scanned=total_scanned,
         )
 
-    def _scan_chat(self, agent: Any, chat_id: str) -> tuple[list[BaseItem], list[str], int]:
-        """Scan messages in a Telegram chat."""
-        items: list[BaseItem] = []
-        snippets: list[str] = []
-        count = 0
-        logger.info("Would scan Telegram chat: %s (requires running Harnext agent)", chat_id)
-        return items, snippets, count
+    def _scan_chat(self, chat_id: str) -> tuple[list[BaseItem], list[str], int]:
+        """Scan messages in a Telegram chat via the telegram MCP server."""
+        since_hours = self.message_filters.get("since_hours", 168)
+        max_messages = self.message_filters.get("max_messages_per_chat", 100)
+        prompt = (
+            f"Read messages in Telegram chat {chat_id} from the last {since_hours} hours "
+            f"(up to {max_messages} messages), including reply chains. "
+            "Extract only project-relevant messages (decisions, bugs, feature requests, "
+            "architecture discussions, answered questions)."
+        )
+        result_text = self._run_query(prompt)
+        findings = self._parse_json_array(result_text)
+        items = self._extract_items(findings)
+        return items, [result_text] if result_text else [], len(findings)
 
     def _extract_items(self, raw_findings: list[dict[str, Any]]) -> list[BaseItem]:
         """Extract memory items from Telegram messages."""

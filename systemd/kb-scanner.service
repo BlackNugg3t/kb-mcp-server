@@ -1,6 +1,6 @@
 [Unit]
 Description=GymBoost Knowledge Base Scanner (One-shot)
-Documentation=https://github.com/dev-Leone/gymboost-PWA-betaa
+Documentation=https://github.com/GymBOOST-team/gymboost
 After=network-online.target kb-mcp-server.service
 Wants=network-online.target kb-mcp-server.service
 

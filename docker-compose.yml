@@ -23,7 +23,8 @@ services:
       # Transport mode: "sse" for HTTP (remote agents), "stdio" for local only
       - MCP_MODE=sse
       # API tokens (set these in .env or environment)
-      - KB_AUTH_TOKEN=${KB_AUTH_TOKEN:-}
+      # Required in sse/http mode — the server now refuses to start without it (see src/main.py).
+      - KB_AUTH_TOKEN=${KB_AUTH_TOKEN:?Set KB_AUTH_TOKEN in .env — required for sse/http mode}
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
       - NOTION_API_KEY=${NOTION_API_KEY:-}
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}

@@ -27,6 +27,16 @@ def set_coordinator(coordinator: Any) -> None:
     _coordinator = coordinator
 
 
+# ── Reference to chat agent (set by server on init) ────────────────────────
+_chat_agent: Any = None
+
+
+def set_chat_agent(agent: Any) -> None:
+    """Inject the ChatAgent reference for the ask_kb tool."""
+    global _chat_agent
+    _chat_agent = agent
+
+
 # ════════════════════════════════════════════════════════════════════════════
 #  Query Tools
 # ════════════════════════════════════════════════════════════════════════════
@@ -239,7 +249,7 @@ def get_kb_stats(index_path: str) -> str:
     """
     try:
         from ..storage.indexer import Indexer
-        from ..storage.models import ItemType
+        from ..storage.models import ItemType, Source
 
         indexer = Indexer(base_path=str(Path(index_path).parent), index_file=Path(index_path).name)
         indexer.load()
@@ -257,8 +267,7 @@ def get_kb_stats(index_path: str) -> str:
             },
             "by_source": {
                 src.value: len(indexer.get_by_source(src))
-                for src in [s for s in indexer.index.scan_stats.keys()]
-                if hasattr(type(src), "__iter__")
+                for src in Source
             },
             "scan_stats": {
                 src: {
@@ -273,6 +282,37 @@ def get_kb_stats(index_path: str) -> str:
 
     except Exception as e:
         logger.exception("get_kb_stats failed")
+        return json.dumps({"error": str(e)})
+
+
+def ask_kb(index_path: str, question: str, session_id: Optional[str] = None) -> str:
+    """
+    Ask a natural-language question and get an answer from an agent with
+    real tool-calling access to the knowledge base (search_kb, get_knowledge,
+    etc.) — grounded and source-cited, not just raw search results. Pass the
+    returned session_id back in to continue the same conversation.
+
+    Args:
+        index_path: Path to knowledge/index.json (unused directly — the
+            chat agent reaches the KB via its own registered MCP tools)
+        question: The question to ask
+        session_id: Continue a prior conversation; omit to start a new one
+
+    Returns:
+        JSON: {"answer": ..., "session_id": ...} or {"error": ...}
+    """
+    try:
+        if _chat_agent is None:
+            return json.dumps({
+                "error": "Chat agent not initialized. The MCP server must be started with chat support.",
+                "status": "unavailable",
+            })
+
+        answer, new_session_id = _chat_agent.ask(question, session_id=session_id)
+        return json.dumps({"answer": answer, "session_id": new_session_id}, indent=2, default=str)
+
+    except Exception as e:
+        logger.exception("ask_kb failed")
         return json.dumps({"error": str(e)})
 
 
@@ -353,6 +393,70 @@ def reload_index(index_path: str) -> str:
         return json.dumps({"error": str(e), "status": "failed"})
 
 
+def export_kb(index_path: str) -> str:
+    """
+    Export the entire knowledge base as a single portable JSON bundle
+    (every index entry plus its rendered markdown content). Feed the
+    returned bundle to import_kb (here, or on another KB instance) to
+    restore it.
+
+    Args:
+        index_path: Path to knowledge/index.json
+
+    Returns:
+        JSON bundle: {"format_version": 1, "exported_at": ..., "entries": [...]}
+    """
+    try:
+        from ..kb_export import export_bundle
+        from ..storage.indexer import Indexer
+
+        indexer = Indexer(base_path=str(Path(index_path).parent), index_file=Path(index_path).name)
+        indexer.load()
+
+        bundle = export_bundle(indexer)
+        return json.dumps(bundle, indent=2, default=str)
+
+    except Exception as e:
+        logger.exception("export_kb failed")
+        return json.dumps({"error": str(e)})
+
+
+def import_kb(index_path: str, bundle_json: str, mode: str = "merge") -> str:
+    """
+    Import a knowledge base bundle (as produced by export_kb). Recomputes
+    file paths and content hashes server-side — never trusts the bundle's
+    own declared path or hash.
+
+    Args:
+        index_path: Path to knowledge/index.json
+        bundle_json: The JSON bundle text (as returned by export_kb)
+        mode: "merge" (default, upsert only) or "replace" (also deletes
+              local entries absent from the bundle)
+
+    Returns:
+        JSON summary of what was added/updated/unchanged/deleted.
+    """
+    try:
+        from ..kb_export import import_bundle as _import_bundle
+        from ..storage.indexer import Indexer
+
+        bundle = json.loads(bundle_json)
+
+        indexer = Indexer(base_path=str(Path(index_path).parent), index_file=Path(index_path).name)
+        indexer.load()
+
+        summary = _import_bundle(indexer, bundle, mode=mode)
+        indexer.save()
+
+        return json.dumps({"status": "completed", "mode": mode, **summary}, indent=2, default=str)
+
+    except (json.JSONDecodeError, ValueError) as e:
+        return json.dumps({"error": str(e), "status": "failed"})
+    except Exception as e:
+        logger.exception("import_kb failed")
+        return json.dumps({"error": str(e), "status": "failed"})
+
+
 # ════════════════════════════════════════════════════════════════════════════
 #  Tool Definitions Registry
 # ════════════════════════════════════════════════════════════════════════════
@@ -419,6 +523,30 @@ TOOL_DEFINITIONS = [
             "required": ["index_path"],
         },
     },
+    {
+        "name": "ask_kb",
+        "description": "Ask a natural-language question about the GymBoost project. Answered by an agent with real tool access to search/read the knowledge base, grounded and source-cited. Pass back the returned session_id to continue the same conversation.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "index_path": {"type": "string", "description": "Path to knowledge/index.json"},
+                "question": {"type": "string", "description": "The question to ask"},
+                "session_id": {"type": "string", "description": "Continue a prior conversation (from a previous ask_kb response); omit to start a new one"},
+            },
+            "required": ["index_path", "question"],
+        },
+    },
+    {
+        "name": "export_kb",
+        "description": "Export the entire knowledge base as a single portable JSON bundle (every entry + its full content). Feed the result to import_kb to restore it, here or on another KB instance.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "index_path": {"type": "string", "description": "Path to knowledge/index.json"},
+            },
+            "required": ["index_path"],
+        },
+    },
     # ── Admin tools ────────────────────────────────────────────────────────
     {
         "name": "rescan_kb",
@@ -448,6 +576,22 @@ TOOL_DEFINITIONS = [
                 "index_path": {"type": "string", "description": "Path to knowledge/index.json"},
             },
             "required": ["index_path"],
+        },
+    },
+    {
+        "name": "import_kb",
+        "description": "Import a knowledge base bundle produced by export_kb, merging it into (or replacing) this knowledge base.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "index_path": {"type": "string", "description": "Path to knowledge/index.json"},
+                "bundle_json": {"type": "string", "description": "The JSON bundle text, as returned by export_kb"},
+                "mode": {
+                    "type": "string",
+                    "description": "'merge' (default, upsert only) or 'replace' (also deletes local entries absent from the bundle)",
+                },
+            },
+            "required": ["index_path", "bundle_json"],
         },
     },
 ]

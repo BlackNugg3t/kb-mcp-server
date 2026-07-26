@@ -34,4 +34,14 @@ For each finding, produce a structured snippet:
 
 ## Output format
 
-Return a structured list of findings. READ ONLY — never create or modify Notion content.
+Your final message must be ONLY a JSON array — no prose, no markdown code fences, no explanation before or after. If there are no findings, output `[]`. Each element must match this shape exactly:
+
+```json
+[
+  {"object": "page", "id": "notion-page-uuid", "url": "https://www.notion.so/...",
+   "title": "...", "summary": "one-paragraph summary", "content": "extracted text content",
+   "authors": ["author name"]}
+]
+```
+
+READ ONLY — never create or modify Notion content.

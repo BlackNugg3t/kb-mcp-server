@@ -327,7 +327,7 @@ jobs:
 ### GitHub Runner Setup
 
 The KB and a self-hosted GitHub Actions runner (registered against
-`dev-Leone/gymboost-PWA-betaa`) run as two containers on the same
+`GymBOOST-team/gymboost`) run as two containers on the same
 `kb-network` bridge, on one dedicated Debian box — but they have
 **independent lifecycles**. `./run.sh` starts only the runner; the KB is
 brought up later, whenever it's actually needed, with `./run-kb.sh`. Both
@@ -379,7 +379,7 @@ docker compose exec gh-runner curl -sf http://kb-mcp-server:9020/health
 | Var | Purpose |
 |-----|---------|
 | `GH_RUNNER_PAT` | PAT scoped to the target repo (Administration: read/write, or classic `repo` scope) — used only by the runner to mint/revoke its own registration token. |
-| `GH_RUNNER_REPO_URL` | The repo the runner registers against, e.g. `https://github.com/dev-Leone/gymboost-PWA-betaa`. |
+| `GH_RUNNER_REPO_URL` | The repo the runner registers against, e.g. `https://github.com/GymBOOST-team/gymboost`. |
 | `CLAUDE_CODE_OAUTH_TOKEN` | Claude Code OAuth token. `deploy.sh` pushes it to the repo's GitHub Actions secrets — harnext steps in workflows already reference `secrets.CLAUDE_CODE_OAUTH_TOKEN`, injected per-job by GitHub itself. The runner container never reads this value directly. |
 
 **Why not a custom polling loop?** A real self-hosted runner doesn't need

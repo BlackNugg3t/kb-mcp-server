@@ -11,7 +11,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from ..config import ServiceConfig
+from ..config import LLMConfig, ServiceConfig
 from ..storage.models import (
     ArtifactItem,
     BaseItem,
@@ -32,8 +32,13 @@ class NotionScannerAgent(BaseScannerAgent):
 
     source = Source.NOTION
 
-    def __init__(self, service_config: ServiceConfig, skill_path: str | None = None):
-        super().__init__(service_config, skill_path)
+    def __init__(
+        self,
+        service_config: ServiceConfig,
+        skill_path: str | None = None,
+        llm_config: LLMConfig | None = None,
+    ):
+        super().__init__(service_config, skill_path, llm_config)
         self.databases = service_config.databases
         self.page_filters = service_config.page_filters
 
@@ -47,13 +52,11 @@ class NotionScannerAgent(BaseScannerAgent):
         all_snippets: list[str] = []
         total_scanned = 0
 
-        agent = self._init_agent()
-
         # Scan pages matching the search query
         search_query = self.page_filters.get("search_query", "")
         if search_query:
             try:
-                items, snippets, count = self._scan_pages(agent, search_query)
+                items, snippets, count = self._scan_pages(search_query)
                 all_items.extend(items)
                 all_snippets.extend(snippets)
                 total_scanned += count
@@ -63,7 +66,7 @@ class NotionScannerAgent(BaseScannerAgent):
         # Scan configured databases
         for db_id in self.databases:
             try:
-                items, snippets, count = self._scan_database(agent, db_id)
+                items, snippets, count = self._scan_database(db_id)
                 all_items.extend(items)
                 all_snippets.extend(snippets)
                 total_scanned += count
@@ -77,21 +80,28 @@ class NotionScannerAgent(BaseScannerAgent):
             items_scanned=total_scanned,
         )
 
-    def _scan_pages(self, agent: Any, query: str) -> tuple[list[BaseItem], list[str], int]:
-        """Scan Notion pages matching a search query."""
-        items: list[BaseItem] = []
-        snippets: list[str] = []
-        count = 0
-        logger.info("Would scan Notion pages for query: %s (requires running Harnext agent)", query)
-        return items, snippets, count
+    def _scan_pages(self, query: str) -> tuple[list[BaseItem], list[str], int]:
+        """Scan Notion pages matching a search query via the notion MCP server."""
+        since_days = self.page_filters.get("since_days", 7)
+        prompt = (
+            f'Search Notion for pages matching "{query}" that were created or updated '
+            f'in the last {since_days} days. Only include findings with "object": "page".'
+        )
+        result_text = self._run_query(prompt)
+        findings = self._parse_json_array(result_text)
+        items = self._extract_items(findings)
+        return items, [result_text] if result_text else [], len(findings)
 
-    def _scan_database(self, agent: Any, db_id: str) -> tuple[list[BaseItem], list[str], int]:
-        """Scan a specific Notion database."""
-        items: list[BaseItem] = []
-        snippets: list[str] = []
-        count = 0
-        logger.info("Would scan Notion database: %s (requires running Harnext agent)", db_id)
-        return items, snippets, count
+    def _scan_database(self, db_id: str) -> tuple[list[BaseItem], list[str], int]:
+        """Scan a specific Notion database via the notion MCP server."""
+        prompt = (
+            f"Query the Notion database {db_id} for entries. "
+            'Only include findings with "object": "database_entry".'
+        )
+        result_text = self._run_query(prompt)
+        findings = self._parse_json_array(result_text)
+        items = self._extract_items(findings)
+        return items, [result_text] if result_text else [], len(findings)
 
     def _extract_items(self, raw_findings: list[dict[str, Any]]) -> list[BaseItem]:
         """Extract knowledge items from Notion page data."""

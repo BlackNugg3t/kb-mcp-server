@@ -39,6 +39,18 @@ For each meaningful message, produce a structured snippet:
 - Context: what was being discussed
 - Type: decision | bug_report | feature_request | question | announcement | discussion
 
+## Output format
+
+Your final message must be ONLY a JSON array — no prose, no markdown code fences, no explanation before or after. If there are no findings, output `[]`. Each element must match this shape exactly (note: `message_id`, not `id`):
+
+```json
+[
+  {"message_id": "telegram-message-id", "chat": "chat-name-or-id",
+   "summary": "short one-line summary", "content": "message text", "rationale": "why this matters",
+   "timestamp": "2026-07-06T12:00:00Z", "participants": ["username1", "username2"]}
+]
+```
+
 ## Privacy & Scope
 
 Only extract project-relevant information. Skip personal chatter and off-topic messages.
