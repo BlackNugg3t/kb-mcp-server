@@ -30,11 +30,43 @@ services:
       - EPHEMERAL=false
       - DISABLE_AUTO_UPDATE=true
 
+    volumes:
+      # Host Docker socket passthrough — needed by db-smoke.yml's
+      # `supabase db start` (shells out to Docker for a local Postgres).
+      # Tradeoff: grants this container root-equivalent access to the host
+      # Docker daemon. Accepted deliberately; see kb-mcp-server AGENTS.md /
+      # the runner-migration plan for the rationale.
+      - /var/run/docker.sock:/var/run/docker.sock
+
     networks:
       - kb-network
 
     # No published ports: the runner only makes outbound connections to
     # GitHub (long-poll) and to kb-mcp-server over the internal network.
+
+  # Queue watcher: scales burst capacity to zero when idle. See
+  # runner/watch-queue.sh for the polling logic. Shares the same image as
+  # gh-runner (already has gh + docker CLI), just overrides the entrypoint.
+  runner-watcher:
+    build: ./runner
+    image: gymboost-gh-runner:latest
+    container_name: runner-watcher
+    restart: unless-stopped
+    entrypoint: ["/bin/bash", "/watch-queue.sh"]
+
+    environment:
+      - ACCESS_TOKEN=${GH_RUNNER_PAT:?Set GH_RUNNER_PAT in .env}
+      - REPO_URL=${GH_RUNNER_REPO_URL:?Set GH_RUNNER_REPO_URL in .env}
+      - LABELS=${GH_RUNNER_LABELS:-self-hosted,linux,gymboost}
+      - MAX_EXTRA_RUNNERS=${GH_RUNNER_MAX_EXTRA:-4}
+      - POLL_INTERVAL_SECONDS=30
+
+    volumes:
+      # Needed to `docker run` burst runner containers on demand.
+      - /var/run/docker.sock:/var/run/docker.sock
+
+    networks:
+      - kb-network
 
 networks:
   kb-network:

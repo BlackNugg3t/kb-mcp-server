@@ -326,15 +326,32 @@ jobs:
 
 ### GitHub Runner Setup
 
-The KB and a self-hosted GitHub Actions runner (registered against
-`GymBOOST-team/gymboost`) run as two containers on the same
-`kb-network` bridge, on one dedicated Debian box — but they have
-**independent lifecycles**. `./run.sh` starts only the runner; the KB is
-brought up later, whenever it's actually needed, with `./run-kb.sh`. Both
-scripts share the same Compose project (derived from this directory), so
-they land on the same `kb-network` regardless of which one runs first —
-the runner reaches the KB by service name once it exists, no `localhost`
-port juggling needed.
+The KB and a self-hosted GitHub Actions runner pool (registered against
+`GymBOOST-team/gymboost`) run as containers on the same `kb-network`
+bridge, on one dedicated Debian box — but they have **independent
+lifecycles**. `./run.sh` starts the runner pool; the KB is brought up later,
+whenever it's actually needed, with `./run-kb.sh`. Both scripts share the
+same Compose project (derived from this directory), so they land on the
+same `kb-network` regardless of which one runs first — the runner reaches
+the KB by service name once it exists, no `localhost` port juggling needed.
+
+**The runner pool has two parts:**
+- `gh-runner` — one always-on, persistent (`EPHEMERAL=false`) runner. Zero
+  cold-start for the common case of one job at a time.
+- `runner-watcher` — polls GitHub every 30s for queued-vs-idle counts and
+  `docker run`s extra `EPHEMERAL=true` "burst" runners on demand (capped at
+  `GH_RUNNER_MAX_EXTRA`), one per unmet job. A burst runner registers, runs
+  exactly one job, deregisters, and `--rm` removes it — true scale-to-zero,
+  no idle burst containers when the queue is empty. This is how the pool
+  handles more than one job (e.g. two harnext agent runs on different
+  issues) at once, without paying for N always-on containers. See
+  `runner/watch-queue.sh`.
+
+Both `gh-runner` and any burst runner get the host Docker socket mounted
+(`/var/run/docker.sock`) — needed by the app repo's `db-smoke.yml`, which
+shells out to Docker via `supabase db start`. Deliberate tradeoff: this
+grants the runner containers root-equivalent access to the host Docker
+daemon.
 
 ```bash
 # On the runner machine (fresh Debian box):
@@ -343,11 +360,13 @@ cd kb-mcp-server
 
 cp .env.example .env
 vim .env   # fill in KB_AUTH_TOKEN, GH_RUNNER_PAT, GH_RUNNER_REPO_URL,
-           # CLAUDE_CODE_OAUTH_TOKEN (see comments in .env.example)
+           # CLAUDE_CODE_OAUTH_TOKEN, GH_RUNNER_MAX_EXTRA (see .env.example)
+           # GH_RUNNER_PAT needs Administration:RW + Actions:Read (the
+           # latter is what lets runner-watcher list queued runs).
 
 ./deploy.sh   # installs Docker if missing, validates .env, builds images,
               # syncs CLAUDE_CODE_OAUTH_TOKEN to the repo's GH secrets
-./run.sh      # starts gh-runner ONLY
+./run.sh      # starts gh-runner + runner-watcher
 
 # Later, when the KB is actually needed:
 ./run-kb.sh           # mcp-server only — query mode, no auto-scan
@@ -370,6 +389,8 @@ Verify:
 ```bash
 curl http://localhost:9020/health          # once run-kb.sh has been run
 docker logs -f gh-runner                   # look for "Listening for Jobs"
+docker logs -f runner-watcher              # should loop quietly when idle
+docker compose exec gh-runner docker ps    # confirms the socket mount works
 docker compose exec gh-runner curl -sf http://kb-mcp-server:9020/health
 # then check GitHub: repo -> Settings -> Actions -> Runners
 ```
@@ -378,21 +399,26 @@ docker compose exec gh-runner curl -sf http://kb-mcp-server:9020/health
 
 | Var | Purpose |
 |-----|---------|
-| `GH_RUNNER_PAT` | PAT scoped to the target repo (Administration: read/write, or classic `repo` scope) — used only by the runner to mint/revoke its own registration token. |
+| `GH_RUNNER_PAT` | PAT scoped to the target repo — Administration: read/write (mint/revoke registration tokens, list runners) + Actions: Read (list queued runs, for `runner-watcher`). Classic `repo` scope also works. |
 | `GH_RUNNER_REPO_URL` | The repo the runner registers against, e.g. `https://github.com/GymBOOST-team/gymboost`. |
+| `GH_RUNNER_MAX_EXTRA` | Safety cap on simultaneous burst runners `runner-watcher` may start (default 4). |
 | `CLAUDE_CODE_OAUTH_TOKEN` | Claude Code OAuth token. `deploy.sh` pushes it to the repo's GitHub Actions secrets — harnext steps in workflows already reference `secrets.CLAUDE_CODE_OAUTH_TOKEN`, injected per-job by GitHub itself. The runner container never reads this value directly. |
 
-**Why not a custom polling loop?** A real self-hosted runner doesn't need
-one — the `Runner.Listener` process holds a single persistent long-poll
-connection to GitHub and is notified as soon as a job is queued. There's no
-interval to configure, and it isn't "spamming" GitHub — it's one long-lived
-connection, not repeated requests.
+**Why does `runner-watcher` poll, when a real runner's `Runner.Listener`
+already long-polls GitHub for its own jobs?** Different concern. Each
+runner's own long-poll only tells *that* runner about jobs assigned to it —
+it has no visibility into total queue depth. Deciding "there are more
+queued jobs than idle runners, start another one" needs an outside view of
+the queue, which only the Actions API exposes — hence `runner-watcher`
+polling `GET .../actions/runs?status=queued` and `.../actions/runners`
+separately. `gh-runner` itself is unchanged: still one persistent
+long-poll connection, no interval to configure, not "spamming" GitHub.
 
 This infra is separate from actually moving any workflow off
-`ubuntu-latest` — the app repo's harnext workflows still run
-GitHub-hosted; switching a stage to this runner (e.g. adding a
-`self-hosted` label to `runs-on:` in `harnext-verify.yml`) is a later,
-per-workflow decision.
+`ubuntu-latest` — switching a stage to this runner (e.g. adding a
+`self-hosted` label to `runs-on:` in `harnext-verify.yml`) is a per-workflow
+decision made in the app repo, tracked in that repo's runner-migration
+plan.
 
 ---
 
