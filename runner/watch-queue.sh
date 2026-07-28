@@ -21,9 +21,17 @@ export GH_TOKEN="$ACCESS_TOKEN"
 log() { printf '[watch-queue] %s\n' "$1"; }
 
 while true; do
-  queued="$(gh api "repos/${REPO}/actions/runs?status=queued" --jq '.total_count' 2>/dev/null || echo 0)"
-  idle="$(gh api "repos/${REPO}/actions/runners" \
-    --jq '[.runners[] | select(.status == "online" and .busy == false)] | length' 2>/dev/null || echo 0)"
+  if ! queued="$(gh api "repos/${REPO}/actions/runs?status=queued" --jq '.total_count' 2>&1)"; then
+    log "ERROR fetching queued count, skipping this cycle: ${queued}"
+    sleep "$POLL_INTERVAL_SECONDS"
+    continue
+  fi
+  if ! idle="$(gh api "repos/${REPO}/actions/runners" \
+    --jq '[.runners[] | select(.status == "online" and .busy == false)] | length' 2>&1)"; then
+    log "ERROR fetching idle count, skipping this cycle: ${idle}"
+    sleep "$POLL_INTERVAL_SECONDS"
+    continue
+  fi
 
   needed=$(( queued - idle ))
 
