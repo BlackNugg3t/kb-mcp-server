@@ -46,6 +46,7 @@ while true; do
       # 127.0.0.1:<port> from a runner sharing the host's network namespace.
       # See docker-compose.runner.yml's gh-runner comment for the full story.
       docker run -d --rm \
+        --name "$name" \
         --network host \
         -v /var/run/docker.sock:/var/run/docker.sock \
         -e RUNNER_SCOPE=repo \
