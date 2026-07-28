@@ -40,8 +40,13 @@ while true; do
     log "queued=${queued} idle=${idle} — starting ${extra} burst runner(s)"
     for _ in $(seq 1 "$extra"); do
       name="gymboost-burst-$(date +%s)-$RANDOM"
+      # --network host, not kb-network: a burst runner may also pick up
+      # db-smoke.yml, whose `supabase db start` launches sibling Postgres
+      # containers via this same socket — those are only reachable at
+      # 127.0.0.1:<port> from a runner sharing the host's network namespace.
+      # See docker-compose.runner.yml's gh-runner comment for the full story.
       docker run -d --rm \
-        --network kb-network \
+        --network host \
         -v /var/run/docker.sock:/var/run/docker.sock \
         -e RUNNER_SCOPE=repo \
         -e ACCESS_TOKEN="$ACCESS_TOKEN" \

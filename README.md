@@ -327,13 +327,21 @@ jobs:
 ### GitHub Runner Setup
 
 The KB and a self-hosted GitHub Actions runner pool (registered against
-`GymBOOST-team/gymboost`) run as containers on the same `kb-network`
-bridge, on one dedicated Debian box — but they have **independent
-lifecycles**. `./run.sh` starts the runner pool; the KB is brought up later,
-whenever it's actually needed, with `./run-kb.sh`. Both scripts share the
-same Compose project (derived from this directory), so they land on the
-same `kb-network` regardless of which one runs first — the runner reaches
-the KB by service name once it exists, no `localhost` port juggling needed.
+`GymBOOST-team/gymboost`) run as containers on one dedicated Debian box —
+but they have **independent lifecycles**. `./run.sh` starts the runner
+pool; the KB is brought up later, whenever it's actually needed, with
+`./run-kb.sh`.
+
+`gh-runner` (and any burst runner) run with `network_mode: host`, not the
+`kb-network` bridge — a job like `db-smoke.yml` shells out via the
+passed-through Docker socket to start sibling containers (e.g. Postgres)
+directly on the host's Docker daemon, and those are only reachable at
+`127.0.0.1:<port>` from a container sharing the host's network namespace.
+Host networking means the runner reaches the KB the same way anything else
+on the box would — `http://localhost:9020`, since `mcp-server` also
+publishes 9020 to the host — not by `kb-network` service name.
+`runner-watcher` stays on the `kb-network` bridge (it never runs anything
+needing host-network reachability itself).
 
 **The runner pool has two parts:**
 - `gh-runner` — one always-on, persistent (`EPHEMERAL=false`) runner. Zero
@@ -391,7 +399,7 @@ curl http://localhost:9020/health          # once run-kb.sh has been run
 docker logs -f gh-runner                   # look for "Listening for Jobs"
 docker logs -f runner-watcher              # should loop quietly when idle
 docker compose exec gh-runner docker ps    # confirms the socket mount works
-docker compose exec gh-runner curl -sf http://kb-mcp-server:9020/health
+docker compose exec gh-runner curl -sf http://localhost:9020/health
 # then check GitHub: repo -> Settings -> Actions -> Runners
 ```
 

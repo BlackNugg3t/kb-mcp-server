@@ -38,11 +38,17 @@ services:
       # the runner-migration plan for the rationale.
       - /var/run/docker.sock:/var/run/docker.sock
 
-    networks:
-      - kb-network
-
-    # No published ports: the runner only makes outbound connections to
-    # GitHub (long-poll) and to kb-mcp-server over the internal network.
+    # Host networking, not the kb-network bridge. Containers started via the
+    # passed-through socket (e.g. supabase db start's Postgres) are siblings
+    # on the HOST's Docker daemon, not children nested inside this
+    # container's network namespace — from a bridged gh-runner, their
+    # published ports on 127.0.0.1 are unreachable (confirmed: "connection
+    # refused" on 127.0.0.1:54322 despite the container starting fine).
+    # Host networking makes this container's 127.0.0.1 the same as the
+    # host's, so those ports just work. Reach kb-mcp-server (also
+    # host-published, see docker-compose.yml) at http://localhost:9020
+    # instead of the old http://kb-mcp-server:9020 service-name form.
+    network_mode: host
 
   # Queue watcher: scales burst capacity to zero when idle. See
   # runner/watch-queue.sh for the polling logic. Shares the same image as
