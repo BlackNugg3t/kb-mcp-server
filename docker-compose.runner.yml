@@ -70,4 +70,10 @@ services:
 
 networks:
   kb-network:
+    # Pinned so it's always literally "kb-network" regardless of the
+    # Compose project name — watch-queue.sh's `docker run --network
+    # kb-network` calls run outside Compose (raw docker run against the
+    # host daemon via the passed-through socket), so they need the exact
+    # network name, not Compose's auto-prefixed default.
+    name: kb-network
     driver: bridge
