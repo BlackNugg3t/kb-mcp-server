@@ -10,7 +10,7 @@ Usage:
     python -m src.main import kb-export.json [--replace]  — Import a bundle file
 
 Environment:
-    GITHUB_TOKEN         — GitHub personal access token
+    KB_GITHUB_TOKEN      — GitHub personal access token
     NOTION_API_KEY       — Notion integration token
     DISCORD_BOT_TOKEN    — Discord bot token
     TELEGRAM_BOT_TOKEN   — Telegram bot token

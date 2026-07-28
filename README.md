@@ -78,7 +78,7 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 
 # Set up environment
 cp .env.example .env
-# Edit .env — add KB_AUTH_TOKEN, GITHUB_TOKEN, etc.
+# Edit .env — add KB_AUTH_TOKEN, KB_GITHUB_TOKEN, etc.
 
 # Start the MCP server (mode from config.json — auto-detects stdio or sse)
 python -m src.main serve
@@ -95,7 +95,7 @@ cd /data/code/gymboost/kb-mcp-server
 
 # Create .env with your tokens
 cp .env.example .env
-vim .env  # add KB_AUTH_TOKEN, GITHUB_TOKEN, etc.
+vim .env  # add KB_AUTH_TOKEN, KB_GITHUB_TOKEN, etc.
 
 # Build and start (mcp-server only — query mode, no scanning)
 docker compose up -d
