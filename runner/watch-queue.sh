@@ -33,12 +33,24 @@ while true; do
     continue
   fi
 
+  # Count burst runners already alive — registered with GitHub OR still
+  # booting/registering. `docker ps` sees both; GitHub's idle/busy list does
+  # NOT see a container that hasn't finished registering yet (~15-30s). Without
+  # this, each ~30s cycle recomputes `needed` before the previous wave has
+  # registered, so it over-provisions past the cap — MAX_EXTRA_RUNNERS was a
+  # per-cycle burst limit, never a concurrent ceiling (observed: 11 live burst
+  # containers with the cap set to 8). Over-provisioning starves parallel
+  # vitest suites on the host and flakes timing-sensitive tests. Counting live
+  # containers makes MAX_EXTRA_RUNNERS a true concurrent ceiling and closes the
+  # registration-lag double-count in one stroke.
+  running_bursts="$(docker ps -q --filter 'name=gymboost-burst-' | wc -l)"
+  room=$(( MAX_EXTRA_RUNNERS - running_bursts ))
   needed=$(( queued - idle ))
+  (( needed > room )) && needed=$room
 
   if (( needed > 0 )); then
-    extra=$(( needed < MAX_EXTRA_RUNNERS ? needed : MAX_EXTRA_RUNNERS ))
-    log "queued=${queued} idle=${idle} — starting ${extra} burst runner(s)"
-    for _ in $(seq 1 "$extra"); do
+    log "queued=${queued} idle=${idle} live_bursts=${running_bursts} — starting ${needed} burst runner(s) (cap ${MAX_EXTRA_RUNNERS})"
+    for _ in $(seq 1 "$needed"); do
       name="gymboost-burst-$(date +%s)-$RANDOM"
       # --network host, not kb-network: a burst runner may also pick up
       # db-smoke.yml, whose `supabase db start` launches sibling Postgres
