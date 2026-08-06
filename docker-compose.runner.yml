@@ -27,7 +27,19 @@ services:
       - LABELS=${GH_RUNNER_LABELS:-self-hosted,linux,gymboost}
       # Persistent runner: one long-lived container processes jobs
       # sequentially rather than re-registering after every job.
-      - EPHEMERAL=false
+      #
+      # EPHEMERAL is deliberately NOT set here. myoung34/github-runner treats
+      # it as a presence flag, not a boolean — its entrypoint checks whether
+      # the variable is set/non-empty, so `EPHEMERAL=false` switches ephemeral
+      # mode ON. That was the bug: `docker logs gh-runner` printed "Ephemeral
+      # option is enabled" / "Runner reusage is disabled" despite the compose
+      # file saying false. The runner then took one job, deregistered, exited,
+      # and `restart: unless-stopped` restarted it into a fresh registration —
+      # producing endless "Registration <uuid> was not found" churn and a
+      # persistent runner that kept flapping offline mid-job.
+      #
+      # Omitting the variable is the only way to get a non-ephemeral runner.
+      # Do not "fix" this by setting it back to false.
       - DISABLE_AUTO_UPDATE=true
 
     volumes:
