@@ -131,8 +131,8 @@ if [[ ${#BURSTS[@]} -gt $CAP ]]; then
 fi
 # Each burst runner competes for the same RAM/CPU as everything else on this
 # box, and nothing in watch-queue.sh sets --memory/--cpus on them.
-if [[ ${#BURSTS[@]} -ge $CAP && $CAP -ge 6 ]]; then
-  note "cap is ${CAP} and currently saturated; burst containers have no --memory/--cpus limit, so this is where OOM kills and cancelled jobs come from. Consider GH_RUNNER_MAX_EXTRA=3-4."
+if [[ ${#BURSTS[@]} -ge $CAP ]]; then
+  note "burst pool is at its cap (${CAP}) — no room to scale further. If jobs are queuing, either the cap is too low for the workload or some of these containers are zombies (see the cross-reference below)."
 fi
 
 # ── 3. GitHub's view, cross-referenced ──────────────────────────────────────
@@ -184,6 +184,31 @@ else
         note "$name is registered on GitHub but has no container — stale registration, delete with: gh api -X DELETE repos/${REPO}/actions/runners/<id>"
       printf '%s %-32s %-9s %-6s %b\n' "$mark" "$name" "$status" "$busy" "$here"
     done <<< "$runners"
+
+    # ── Zombie burst runners ────────────────────────────────────────────────
+    # The inverse of a leaked registration, and the one that actually hurts.
+    # A burst runner is meant to live for exactly one job: register, run it,
+    # deregister, exit, `--rm` removes the container. A container that is
+    # alive but NOT online to GitHub (offline, or never registered at all)
+    # will never be handed work again — yet watch-queue.sh still counts it
+    # via `docker ps`, so it permanently consumes a slot of MAX_EXTRA_RUNNERS.
+    # Enough of these and the pool cannot scale even though it looks busy.
+    if [[ $OFF_HOST -eq 0 && ${#BURSTS[@]} -gt 0 ]]; then
+      # Names GitHub currently considers online, one per line.
+      online_names=$(awk -F'\t' '$2 == "online" { print $1 }' <<< "$runners")
+      zombies=0
+      for entry in "${BURSTS[@]}"; do
+        bname="${entry%%$'\t'*}"
+        if ! grep -qxF "$bname" <<< "$online_names"; then
+          zombies=$((zombies + 1))
+          printf '%s %s\n' "$BAD" \
+            "${R}zombie:${N} ${bname} — container alive but not online to GitHub"
+        fi
+      done
+      if [[ $zombies -gt 0 ]]; then
+        problem "${zombies} burst container(s) are alive but not online to GitHub — they cannot take jobs, yet they occupy ${zombies}/${CAP} of the burst budget (room left: $((CAP - ${#BURSTS[@]}))). Clear them: docker rm -f \$(docker ps -q --filter name=gymboost-burst-)"
+      fi
+    fi
   fi
 
   queued=$(gh_api "repos/${REPO}/actions/runs?status=queued" '.total_count')
@@ -265,7 +290,7 @@ fi
 # ── 7. Verdict ──────────────────────────────────────────────────────────────
 printf '\n'; hr
 if [[ ${#PROBLEMS[@]} -eq 0 ]]; then
-  printf '%s %s\n' "$OK" "${G}${BOLD}HEALTHY${N} — containers up, GitHub agrees, queue is being served."
+  printf '%s %s\n' "$OK" "${G}${BOLD}HEALTHY${N} — containers up, every live runner is online to GitHub, nothing stuck."
 else
   printf '%s %s\n' "$BAD" "${R}${BOLD}${#PROBLEMS[@]} PROBLEM(S)${N}"
   for p in "${PROBLEMS[@]}"; do printf '   %s %s\n' "${R}✗${N}" "$p"; done
