@@ -16,10 +16,15 @@ if ! docker info &>/dev/null; then
   DOCKER="sudo docker"
 fi
 
-$DOCKER compose -f docker-compose.runner.yml up -d
+# --build is load-bearing, not belt-and-braces: watch-queue.sh is COPYed into
+# the image at build time (runner/Dockerfile:24), NOT bind-mounted. Without it,
+# a `git pull` that changes watch-queue.sh leaves the OLD script running and
+# `up -d` finds nothing to recreate, so the update silently does nothing.
+$DOCKER compose -f docker-compose.runner.yml up -d --build
 
 echo
 echo "Started gh-runner. Useful checks:"
+echo "  Full diagnosis: ./status.sh"
 echo "  Runner logs:    docker logs -f gh-runner   (look for 'Listening for Jobs')"
 echo "  Registered as:  GitHub repo -> Settings -> Actions -> Runners"
 echo

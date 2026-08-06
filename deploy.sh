@@ -88,4 +88,28 @@ else
   warn "Set CLAUDE_CODE_OAUTH_TOKEN manually: gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo ${REPO}"
 fi
 
-log "Deploy complete. Run ./run.sh to start the KB server + runner."
+# ── 5. Restart any systemd units running this code ─────────────────────────
+#
+# The RUNNER has no systemd unit by design — `restart: unless-stopped` plus
+# Docker's own service handle it (see run.sh). But the KB units in systemd/
+# run `python3 -m src.main serve` directly from this working directory, so a
+# deploy that changes the code leaves a running unit executing the OLD code
+# until something restarts it. Neither this script nor run.sh used to do that.
+#
+# Only touches units that are actually installed AND active — this is a no-op
+# on a host that runs the KB via ./run-kb.sh (docker compose) or not at all.
+if command -v systemctl &>/dev/null; then
+  for unit in kb-mcp-server.service kb-scanner.timer; do
+    if systemctl is-active --quiet "$unit" 2>/dev/null; then
+      log "Restarting active systemd unit ${unit} so it picks up the new code..."
+      sudo systemctl restart "$unit" || warn "Failed to restart ${unit} — restart it by hand."
+    elif systemctl list-unit-files 2>/dev/null | grep -q "^${unit}"; then
+      log "${unit} is installed but not active — leaving it stopped."
+    fi
+  done
+else
+  warn "systemctl not found — skipping systemd restart step."
+fi
+
+log "Deploy complete. Run ./run.sh to start the runner (./run-kb.sh for the KB)."
+log "Then check everything with ./status.sh"
