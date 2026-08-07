@@ -76,29 +76,47 @@ $DOCKER compose -f docker-compose.yml -f docker-compose.runner.yml build
 REPO="$(echo "$GH_RUNNER_REPO_URL" | sed -E 's#https://github.com/##; s#\.git$##')"
 
 if command -v gh &>/dev/null && gh auth status &>/dev/null; then
-  # Do NOT overwrite an existing secret. This used to set
-  # CLAUDE_CODE_OAUTH_TOKEN unconditionally while PAT_TOKEN was guarded, and
-  # that asymmetry broke production on 2026-08-06: a routine ./deploy.sh run
-  # (done to ship an unrelated runner fix) silently replaced a WORKING repo
-  # secret with the stale value sitting in this host's .env. Every agent job
-  # afterwards died in ~800ms with is_error:true and $0 cost — the signature
-  # of a rejected token — while the pipeline looked structurally healthy.
+  # `.env` is the source of truth for CLAUDE_CODE_OAUTH_TOKEN — rotate the
+  # token there and `./deploy.sh` pushes it to the repo. That is deliberate:
+  # one place to edit, not two.
   #
-  # deploy.sh's job is to bootstrap a fresh box, not to be the source of truth
-  # for a live credential. Rotating a token is now an explicit, deliberate act:
-  #   gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo <repo>
-  for pair in "CLAUDE_CODE_OAUTH_TOKEN:$CLAUDE_CODE_OAUTH_TOKEN" \
-              "PAT_TOKEN:$GH_RUNNER_PAT"; do
-    name="${pair%%:*}"
-    value="${pair#*:}"
-    if gh secret list --repo "$REPO" --json name --jq '.[].name' 2>/dev/null \
-         | grep -qx "$name"; then
-      log "${name} already set on ${REPO} — leaving it alone (rotate it deliberately, not via deploy)."
-    else
-      log "${name} not set on ${REPO} yet — syncing from .env."
-      gh secret set "$name" --repo "$REPO" --body "$value"
-    fi
-  done
+  # What bit us on 2026-08-06 was not the sync itself but that it was SILENT.
+  # A deploy run to ship an unrelated runner fix pushed a stale .env value over
+  # a working secret, and every agent job afterwards died in ~350-800ms with
+  # is_error:true and total_cost_usd:0 — a rejected token — while the runner,
+  # the labels and the workflows all looked perfectly healthy. Nothing in the
+  # deploy output hinted that a live credential had just been replaced.
+  #
+  # So: still sync from .env, but refuse obvious junk and say loudly when an
+  # existing secret is being overwritten.
+  if [[ -z "${CLAUDE_CODE_OAUTH_TOKEN// /}" ]]; then
+    die "CLAUDE_CODE_OAUTH_TOKEN is empty in .env — refusing to overwrite the repo secret with nothing."
+  fi
+  case "$CLAUDE_CODE_OAUTH_TOKEN" in
+    *your-token-here* | *changeme* | *placeholder* | *xxxxx* | *REPLACE_ME*)
+      die "CLAUDE_CODE_OAUTH_TOKEN in .env still looks like a placeholder — refusing to push it over the live secret." ;;
+  esac
+  if [[ "$CLAUDE_CODE_OAUTH_TOKEN" != sk-ant-* ]]; then
+    warn "CLAUDE_CODE_OAUTH_TOKEN does not start with 'sk-ant-' — double-check it is a real Claude Code OAuth token."
+  fi
+
+  if gh secret list --repo "$REPO" --json name --jq '.[].name' 2>/dev/null \
+       | grep -qx CLAUDE_CODE_OAUTH_TOKEN; then
+    warn "OVERWRITING the existing CLAUDE_CODE_OAUTH_TOKEN on ${REPO} with this host's .env value."
+    warn "  If agent jobs start failing in under a second at \$0 cost, this line is why — the .env token is stale."
+  else
+    log "CLAUDE_CODE_OAUTH_TOKEN not set on ${REPO} yet — syncing from .env."
+  fi
+  gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo "$REPO" --body "$CLAUDE_CODE_OAUTH_TOKEN"
+  log "CLAUDE_CODE_OAUTH_TOKEN synced. Verify: gh secret list --repo ${REPO}"
+
+  # PAT_TOKEN keeps its original set-once behaviour — it is the runner's own
+  # registration credential and is not rotated as part of a routine deploy.
+  if ! gh secret list --repo "$REPO" --json name --jq '.[].name' 2>/dev/null \
+       | grep -qx PAT_TOKEN; then
+    log "PAT_TOKEN not set on ${REPO} yet — syncing GH_RUNNER_PAT as PAT_TOKEN."
+    gh secret set PAT_TOKEN --repo "$REPO" --body "$GH_RUNNER_PAT"
+  fi
 else
   warn "gh CLI not found or not authenticated — skipping secret sync."
   warn "Set CLAUDE_CODE_OAUTH_TOKEN manually: gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo ${REPO}"
