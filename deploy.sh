@@ -76,13 +76,29 @@ $DOCKER compose -f docker-compose.yml -f docker-compose.runner.yml build
 REPO="$(echo "$GH_RUNNER_REPO_URL" | sed -E 's#https://github.com/##; s#\.git$##')"
 
 if command -v gh &>/dev/null && gh auth status &>/dev/null; then
-  log "Syncing CLAUDE_CODE_OAUTH_TOKEN to ${REPO} GitHub Actions secrets..."
-  gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo "$REPO" --body "$CLAUDE_CODE_OAUTH_TOKEN"
-
-  if ! gh secret list --repo "$REPO" | grep -q '^PAT_TOKEN'; then
-    log "PAT_TOKEN not set on ${REPO} yet — syncing GH_RUNNER_PAT as PAT_TOKEN."
-    gh secret set PAT_TOKEN --repo "$REPO" --body "$GH_RUNNER_PAT"
-  fi
+  # Do NOT overwrite an existing secret. This used to set
+  # CLAUDE_CODE_OAUTH_TOKEN unconditionally while PAT_TOKEN was guarded, and
+  # that asymmetry broke production on 2026-08-06: a routine ./deploy.sh run
+  # (done to ship an unrelated runner fix) silently replaced a WORKING repo
+  # secret with the stale value sitting in this host's .env. Every agent job
+  # afterwards died in ~800ms with is_error:true and $0 cost — the signature
+  # of a rejected token — while the pipeline looked structurally healthy.
+  #
+  # deploy.sh's job is to bootstrap a fresh box, not to be the source of truth
+  # for a live credential. Rotating a token is now an explicit, deliberate act:
+  #   gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo <repo>
+  for pair in "CLAUDE_CODE_OAUTH_TOKEN:$CLAUDE_CODE_OAUTH_TOKEN" \
+              "PAT_TOKEN:$GH_RUNNER_PAT"; do
+    name="${pair%%:*}"
+    value="${pair#*:}"
+    if gh secret list --repo "$REPO" --json name --jq '.[].name' 2>/dev/null \
+         | grep -qx "$name"; then
+      log "${name} already set on ${REPO} — leaving it alone (rotate it deliberately, not via deploy)."
+    else
+      log "${name} not set on ${REPO} yet — syncing from .env."
+      gh secret set "$name" --repo "$REPO" --body "$value"
+    fi
+  done
 else
   warn "gh CLI not found or not authenticated — skipping secret sync."
   warn "Set CLAUDE_CODE_OAUTH_TOKEN manually: gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo ${REPO}"
