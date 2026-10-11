@@ -80,6 +80,9 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 cp .env.example .env
 # Edit .env — add KB_AUTH_TOKEN, KB_GITHUB_TOKEN, etc.
 
+# Get claude token
+docker run -it --rm node:20 bash -c "npm install -g @anthropic-ai/claude-code && claude setup-token"
+
 # Start the MCP server (mode from config.json — auto-detects stdio or sse)
 python -m src.main serve
 
